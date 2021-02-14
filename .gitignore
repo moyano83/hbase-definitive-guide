@@ -1,0 +1,4 @@
+doc/
+.idea/
+.DS_Store
+hbase-2.4.1/
