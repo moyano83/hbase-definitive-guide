@@ -331,8 +331,204 @@ status, active calls, and so on. Finally the bottom of the page has the attribut
 
 #### Shell Introduction
 
-The HBase Shell is (J)Ruby’s IRB with some HBase-related commands added. Find more by typing _help_ to see a listing of 
-shell commands and options. 
-
+The HBase Shell is (J)Ruby’s IRB with some HBase-related commands added. Find more by typing _help_ to see a listing of shell
+commands and options.
 
 ## Chapter 3: Client API: The Basics<a name="Chapter3"></a>
+
+### General notes
+
+The primary client entry point to HBase is the _Table_ interface in the _org.apache.hadoop.hbase.client_ package which is
+retrieved by means of the _Connection_ instance. All operations that mutate data are guaranteed to be atomic on a per-row
+basis (irrespective of the number of columns. As a general rule, try to batch updates together to reduce the number of
+separate operations on the same row as much as possible. Creating an initial connection to HBase is heavy as each
+instantiation involves scanning the _hbase:meta_ table to check if the table actually exists and if it is enabled, as well as
+a few other operations.
+
+Create a _Connection_ instance only once and reuse it for the rest of the lifetime of your client application. Once you have
+a connection instance you can retrieve references to the actual tables. Ideally you do this per thread since the underlying
+implementation of Table is not guaranteed to the thread-safe. Make sure to close the connection once you are done.
+
+### Data Types and Hierarchy
+
+There are several data centric classes (operations):
+
+    * Get (Query): Retrieve previously stored data from a single row
+    * Scan (Query): Iterate over all or specific rows and return their data
+    * Put (Mutation): Create or update one or more columns in a single row
+    * Delete (Mutation): Remove a specific cell, column, row, etc.
+    * Increment (Mutation): Treat a column as a counter and increment its value
+    * Append (Mutation): Attach the given data to one or more columns in a single row
+
+#### Generic Attributes
+
+The interface _Attribute_ provides a general mechanism to add any kind of information in form of attributes to all the
+data-centric classes. It has the following methods:
+
+```
+Attributes setAttribute(String name,byte[]value);
+byte[]getAttribute(String name);
+Map<String, byte[]>getAttributesMap();
+```
+
+#### Operations: Fingerprint and ID
+
+Another fundamental type is the abstract class Operation, which adds the following methods to all data types:
+
+```
+// Returns the list of column families included in the instance
+abstract Map<String, Object> getFingerprint() 
+
+// Compiles a list including fingerprint, column families with all columns and their data, 
+// total column count, row key, and—if set—the ID and cell-level TTL
+abstract Map<String, Object> toMap(int maxCols) 
+
+// Same as above, but only for 5 columns
+Map<String, Object> toMap()
+
+// Same as toMap(maxCols) but converted to JSON. Might fail due to encoding issues
+String toJSON(int maxCols) throws IOException
+
+// Same as above, but only for 5 columns
+String toJSON() throws IOException
+
+// Attempts to call toJSON(maxCols), but when it fails, falls back to toMap(maxCols)
+String toString(int maxCols)
+
+// Same as above, but only for 5 columns
+String toString()
+```
+
+This class helps in generating useful information collections for logging and general debugging purposes. The intermediate
+OperationWithAttributes class is ex‐ tending the above Operation class, implements the Attributes inter‐ face, and is adding
+the following methods, which are used in conjunction:
+
+```
+OperationWithAttributes setId(String id)
+
+// Returns what was set by the setId() method
+String getId() 
+```
+
+#### Query versus Mutation
+
+_Row_ is also an important interface with the following methods:
+
+```
+// returns the given row key of the instance, implemented by the Query and Mutation classes
+byte[] getRow()
+```
+
+_Mutation_ implements the _CellScannable_ interface to provide the following method:
+
+```
+// A client can call this method to iterate over the returned cells
+CellScanner cellScanner()
+```
+
+Other methods in the mutation class:
+
+    * getACL()/setACL(): The Access Control List (ACL) for this operation
+    * getCellVisibility()/setCellVisibility(): The cell level visibility for all included cells
+    * getClusterIds()/setClusterIds(): The cluster ID as needed for replication purposes
+    * getDurability()/setDurability(): The durability settings for the mutation
+    * getFamilyCellMap()/setFamilyCellMap(): The list of all cells per column family available in this instance
+    * getTimeStamp(): Retrieves the associated timestamp of the Put instance
+    * getTTL()/setTTL(): Sets the cell level TTL value. It is applied to all included Cell instances before being persisted
+    * isEmpty(): Checks if the family map contains any Cell instances
+    * numFamilies(); Convenience method to retrieve the size of the family map, containing all Cell instances
+    * size(): Returns the number of Cell instances that will be added with this Put
+    * heapSize(): Computes the heap space required for the current Put instance. This includes all contained data and space
+      needed for internal structures
+
+The other larger superclass on the retrieval side is Query, which provides a common substrate for all data types concerned
+with reading data from the HBase tables:
+
+    * getAuthorizations()/setAuthorizations(): Visibility labels for the operation
+    * getACL()/setACL(): The Access Control List (ACL) for this operation
+    * getFilter()/setFilter(): The filters that apply to the retrieval operation
+    * getConsistency()/setConsistency(): The consistency level that applies to the current query instance
+    * getIsolationLevel()/setIsolation Level(): Specifies the read isolation level for the operation
+    * getReplicaId()/setReplicaId(): Gives access to the replica ID that served the data
+
+#### Durability, Consistency, and Isolation
+
+Some properties set on read/write operation makes use of enums to set some specifics about the operation itself. For example
+to set the durability levels:
+
+    * USE_DEFAULT: For tables use the global default setting, which is SYNC_WAL. For a mutation use the table’s default value 
+    * SKIP_WAL: Do not write the mutation to the WAL
+    * ASYNC_WAL: Write the mutation asynchronously to the WAL 
+    * SYNC_WAL: Write the mutation synchronously to the WAL 
+    * FSYNC_WAL: Write the Mutation to the WAL synchronously and force the entries to disk
+
+Durability lets you decide how important your data is to you, just because the client library you are using accepts the
+operation does not imply that it has been applied, or persisted even.
+
+On the read side, we can control how consistent is the data read, the options are:
+
+    * STRONG: Strong consistency as per the default of HBase. Data is always current
+    * TIMELINE: Replicas may not be consistent with each other, updates are guaranteed to be applied in order in all replicas
+
+HBase always writes and commits all changes strictly serially, which means that completed transactions are always presented
+in the exact same order. The _isStale()_ method is used to check if we have retrieved data from a replica, not the
+authoritative master.
+
+On the read side, you can also set the isolation level (on the Query superclass). The options are:
+
+    * READ_COMMITTED: Read only data that has been committed by the authoritative server
+    * READ_UNCOMMITTED: Allow reads of data that is in flight, i.e. not committed yet
+
+#### The Cell
+
+A cell instance contains the data as well as the coordinates (row key, name of the column family, column qualifier, and
+timestamp) of one specific cell. _Cell_ is an interface, but the implementing class, named _KeyValue_ is private and cannot
+be instantiated either. The _CellUtil_ class, among many other convenience functions, provides the necessary methods to
+create an instance for us. The data as well as the coordinates are stored as a `Java byte[]` to allow for any arbitrary data
+and to efficiently store only the required bytes, keeping the overhead of internal data structures to a minimum (hence there
+is an Offset and Length parameter for each byte array parameter). A _Cell_ has a type, which can be one of `Put`,`Delete`,
+`DeleteFamilyVersion` (deletes all columns of a column family matching a specific timestamp), `DeleteColumn`,
+`DeleteFamily`. The `toString()` method of a cell instance, prints the following information:
+`<row-key>/<family>:<qualifier>/<version>/<type>/<value-length>/<sequence-id>`.
+
+The _CellComparator_ class is the base to classes that compare given cell instances using the Java _Comparator_ pattern. One
+class is publicly available as an inner class of _CellComparator_, namely the _RowComparator_. You can use this class to
+compare cells by the given row key.
+
+#### API Building Blocks
+
+The basic flow of a client connecting and calling the API looks like this:
+
+```java
+
+// Hadoop class, shared by HBase, to load and provide the configuration to the client application. This class will attempt to 
+// load two configuration files, hbase-default.xml and hbase-site.xml, using the current Java class path
+Configuration conf=HBaseConfiguration.create();
+// Factory method to retrieve a Connection instance,
+        Connection connection=ConnectionFactory.createConnection(conf);
+// TableName represents a table name with its namespace
+        TableName tableName=TableName.valueOf("testtable");
+// The lightweight, not thread-safe representation of a data table within the client API
+        Table table=connection.getTable(tableName);
+
+        Result result=table.get(get);
+
+// You need to close the table and connection to free resources
+        table.close();
+        connection.close();
+```
+
+##### Resource Sharing
+
+Every instance of _Table_ requires a connection to the remote servers, which is handled by the _Connection_ implementation
+instance, acquired using the _ConnectionFactory_. Reuse the connection as every connection does a lot of internal resource
+handling like:
+
+    * Share ZooKeeper Connections: Initial lookup of where user table regions are located
+    * Cache Common Resources: Every zookeeper lookup requires a round network call, but the location is then cached on 
+      the client side to reduce the amount of network traffic, and to speed up the lookup process, if this lookup fails, 
+      the connection has a built-in retry mechanism which result is passed to all other application threads sharing the 
+      same connection reference
+
+### CRUD Operations
+
