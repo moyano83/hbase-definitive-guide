@@ -499,23 +499,22 @@ compare cells by the given row key.
 
 The basic flow of a client connecting and calling the API looks like this:
 
-```java
-
+```
 // Hadoop class, shared by HBase, to load and provide the configuration to the client application. This class will attempt to 
 // load two configuration files, hbase-default.xml and hbase-site.xml, using the current Java class path
 Configuration conf=HBaseConfiguration.create();
 // Factory method to retrieve a Connection instance,
-        Connection connection=ConnectionFactory.createConnection(conf);
+Connection connection=ConnectionFactory.createConnection(conf);
 // TableName represents a table name with its namespace
-        TableName tableName=TableName.valueOf("testtable");
+TableName tableName=TableName.valueOf("testtable");
 // The lightweight, not thread-safe representation of a data table within the client API
-        Table table=connection.getTable(tableName);
+Table table=connection.getTable(tableName);
 
-        Result result=table.get(get);
+Result result=table.get(get);
 
 // You need to close the table and connection to free resources
-        table.close();
-        connection.close();
+table.close();
+connection.close();
 ```
 
 ##### Resource Sharing
@@ -531,4 +530,168 @@ handling like:
       same connection reference
 
 ### CRUD Operations
+
+CRUD operations are provided by the _Table_ interface.
+
+#### Put Method
+
+Put operations can be split into those that work on single rows, those that work on lists of rows, and one that provides a
+server-side, atomic check-and-put.
+
+##### Single Puts
+
+This is the general put operation: `void put(Put put) throws IOException` which depending on the constructor used, would have
+a different effect. You need to supply a row to create a _Put_ instance, and a row in HBase is identified by a unique row
+key (a Java byte[] array). HBase provide us with a helper class that has many static methods to convert Java types into
+byte[] arrays. i.e. `byte[] rowkey = Bytes.toBytes("row_key_id");`. there are also constructor variants that take an existing
+byte array and, respecting a given offset and length parameter, copy the row key bits from the given array instead. i.e:
+
+```
+System.arraycopy("user".getBytes(Charset.forName("UTF8"), 0, dest_array, 45, user‐name_bytes.length);
+Put put = new Put(data, 45, username_bytes.length);
+```
+
+There are as well constructors with buffers and even other _Put_ instances (to clone it). Once you have the _Put_
+instance, you can add data to it. Each call to `addColumn()` specifies exactly one column, or, in combination with an
+optional timestamp, one single cell. Calling any of the `addXX()` methods in a _Put_ instance will internally create a _Cell_
+instance. There are copies of each `addColumn()`, named `addImmutable()`, which do the same as their counterpart, apart from
+not copying the given byte arrays. The variant that takes an existing _Cell_ instance is for users that knows how to
+retrieve, or create, this low-level class. To check for the existence of specific cells, you can use any variant of
+the `boolean has(...)` method, which returns true if a match is found.
+
+    * cellScanner(): Provides a scanner over all cells available in this instance
+    * getACL()/setACL(): The ACLs for this operation 
+    * getAttribute()/setAttribute(): Set and get arbitrary attributes associated with this instance of Put
+    * getAttributesMap(): Returns the entire map of attributes, if any are set
+    * getCellVisibility()/setCellVisibility(): The cell level visibility for all included cells
+    * getClusterIds()/setClusterIds(): The cluster IDs as needed for replication purposes
+    * getDurability()/setDurability(): The durability settings for the mutation
+    * getFamilyCellMap()/setFamilyCellMap(): The list of all cells of this instance
+    * getFingerprint(): Compiles details about the instance into a map for debugging, or logging
+    * getId()/setId(): An ID for the operation, useful for identifying the origin of a request later
+    * getRow(): Returns the row key as specified when creating the Put instance
+    * getTimeStamp(): Retrieves the associated timestamp of the Put instance
+    * getTTL()/setTTL(): Sets the cell level TTL value, which is being applied to all included Cells before being persisted
+    * heapSize(): Computes the heap space required for the current Put instance. Including data and internal structures
+    * isEmpty(): Checks if the family map contains any Cell instances
+    * numFamilies(): Convenience method to retrieve the size of the family map, containing all Cell instances
+    * size(): Returns the number of Cell instances that will be applied with this Put 
+    * toJSON()/toJSON(int): Converts the first 5 or N columns into a JSON format
+    * toMap()/toMap(int): Converts the first 5 or N columns into a map. More detailed than what getFingerprint() returns 
+    * toString()/toString(int): Converts the first 5 or N columns into JSON, or map (if JSON fails due to encoding problems)
+
+Example:
+
+```
+Connection connection = ConnectionFactory.createConnection(HBaseConfiguration.create()); 
+Table table = connection.getTable(TableName.valueOf("testtable"));
+Put put = new Put(Bytes.toBytes("row1"));
+put.addColumn(Bytes.toBytes("colfam1"), Bytes.toBytes("qual1"), Bytes.toBytes("val1"));
+table.put(put);
+table.close();
+connection.close();
+```
+
+##### Client-side Write Buffer
+
+Each _Put_ operation is a remote producure call (RPC) which transfers data from the client to the server and back. To reduce
+the number of round trips and hence response time, the HBase API comes with a built-in client-side write buffer that collects
+put and delete operations so that they are sent in one RPC call to the server(s). The entry point to this functionality is
+the _BufferedMutator_ class (thread safe). It is obtained from the _Connection_ class using one of these methods:
+
+```
+BufferedMutator getBufferedMutator(TableName tableName) throws IOException
+BufferedMutator getBufferedMutator(BufferedMutatorParams params) throws IOException
+```
+
+Important considerations about this class includes:
+
+    * Call close() at the very end of its lifecycle
+    * It might be necessary to call flush() when you have submitted mutations that need to go to the server immediately
+    * If flush is not called, then the update happens asynchronously when the threshold is reached, or when close() is called
+    * Local mutations that are still cached could be lost if the application fails
+
+A _BufferedMutator_ instance can be customized through a _BufferedMutatorParams_ class, which contains useful methods like:
+
+```
+BufferedMutatorParams(TableName tableName) // Constructor
+TableName getTableName() // Returns the table name
+long getWriteBufferSize() // In case the WriteBufferSize is exceeded, the cached mutations are sent asynchronously
+BufferedMutatorParams writeBufferSize(long writeBufferSize)
+int getMaxKeyValueSize() // the size of the included cells is checked against the upper limit set in MaxKeyValueSize setting
+BufferedMutatorParams maxKeyValueSize(int maxKeyValueSize)
+ExecutorService getPool() // The pool to execute the operations asynchronously
+BufferedMutatorParams pool(ExecutorService pool)
+BufferedMutator.ExceptionListener getListener() // listener to be notified when on errors during the mutation on the servers
+BufferedMutatorParams listener(BufferedMutator.ExceptionListenerlistener)
+```
+
+An example of buffer mutator is below:
+
+```
+TableName name = Table table = connection.getTable(TableName.valueOf("testtable"));
+Connection connection = ConnectionFactory.createConnection(conf);
+BufferedMutator mutator = connection.getBufferedMutator(name);
+Put put1 = new Put(Bytes.toBytes("row1"));
+put1.addColumn(Bytes.toBytes("colfam1"), Bytes.toBytes("qual1"), Bytes.toBytes("val1"));
+mutator.mutate(put1);
+...
+
+mutator.flush();
+
+mutator.close();
+table.close();
+connection.close();    
+```
+
+##### List of Puts
+
+It is also possible to batch a set of put operations through the method `void put(List<Put> puts) throws IOException` of
+the _Table_ class:
+
+```
+List<Put> puts = new ArrayList<Put>();
+...
+table.put(puts);
+```
+
+Since you are issuing a list of row mutations to possibly many rows, there is a chance that not all of them will succeed. If
+this happens, an _IOException_ is thrown. The servers iterate over all operations and try to apply them. The failed ones are
+returned, and the client reports the remote error using the _RetriesExhaustedWithDetailsException_, giving you insight into
+how many operations have failed, with what error, and how many times it has retried to apply the erroneous modification. Some
+methods of the _RetriesExhaustedWithDetailsException_ class:
+
+    * getCauses(): Returns a summary of all causes for all failed operations
+    * getExhaustiveDescription(): More detailed list of all the failures that were detected
+    * getNumExceptions(): Returns the number of failed operations
+    * getCause(int i): Returns the exact cause for a given failed operation
+    * getHostnamePort(int i): Returns the exact host that reported the specific error
+    * getRow(int i): Returns the specific mutation instance that failed
+    * mayHaveClusterIssues(): Allows to determine if there are wider problems with the cluster
+
+The MaxKeyValueSize check is done as well for a list of puts. The list-based `put()` call uses the client-side write buffer
+in form of an internal instance of _BatchMutator_ to insert all puts into the local buffer and then to call `flush()`
+implicitly. While inserting each instance of Put, the client API performs the mentioned check. If it fails, for example, at
+the third put out of five, the first two are added to the buffer while the last two are not, and the flush command is not
+triggered. You need to keep inserting puts in the list or call the close() to trigger a flush. Also, you cannot control the
+order in which the puts are applied on the server-side. Because of this, _BufferedMutator_ is preferred over the put list on
+the _Table_ class.
+
+##### Atomic Check-and-Put
+
+The method signatures are:
+
+```
+boolean checkAndPut(byte[] row, byte[] family, byte[] qualifier, byte[] value, Put put) throws IOException
+boolean checkAndPut(byte[] row, byte[] family, byte[] qualifier, CompareFilter.CompareOp compareOp, byte[] value, Put put) throws IOException
+```
+
+These calls allow you to issue atomic, server-side mutations that are guarded by an accompanying check. If the check passes
+successfully, the put operation is executed; otherwise, it aborts the operation completely. The first call implies that the
+given value has to be equal to the stored one. The second call lets you specify the actual comparison operator. An usage
+example of this is to update if another value is not already present by setting the _value_ parameter to _null_. The call
+returns a boolean result value, indicating whether the Put has been applied or not. atomicity guarantees applies only on 
+single rows.
+
+#### Get Method
 
