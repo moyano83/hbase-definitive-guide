@@ -690,8 +690,201 @@ These calls allow you to issue atomic, server-side mutations that are guarded by
 successfully, the put operation is executed; otherwise, it aborts the operation completely. The first call implies that the
 given value has to be equal to the stored one. The second call lets you specify the actual comparison operator. An usage
 example of this is to update if another value is not already present by setting the _value_ parameter to _null_. The call
-returns a boolean result value, indicating whether the Put has been applied or not. atomicity guarantees applies only on 
+returns a boolean result value, indicating whether the Put has been applied or not. atomicity guarantees applies only on
 single rows.
 
 #### Get Method
 
+This operations is split into single or multiple row retrieval.
+
+##### Single Gets
+
+the method that is used to retrieve specific values from a HBase table: `Result get(Get get) throws IOException`. A _get()_
+operation is bound to one specific row, but can retrieve any number of columns and/or cells contained therein.  
+Constructors of _Get_ class:
+
+```
+Get(byte[] row) // row is the row  key to retrieve
+Get(Get get) // Clones the content of the get
+```
+
+To narrow the search or to specify everything down to exact coordinates for a single cell, you have the following methods:
+
+```
+Get addFamily(byte[] family) // To narrow the search to the column family
+Get addColumn(byte[] family, byte[] qualifier) // To narrow the search to the column family and column
+Get setTimeRange(long minStamp, long maxStamp) throws IOException // sets a time range for the search
+Get setTimeStamp(long timestamp) // Sets a specific timestamp
+Get setMaxVersions() // sets the number of versions to return to Integer.MAX_VALUE
+Get setMaxVersions(int maxVersions) throws IOException
+```
+
+Example of the usage is displayed below:
+
+```
+// Create connection
+Configuration conf = HBaseConfiguration.create();
+Connection connection = ConnectionFactory.createConnection(conf); 
+Table table = connection.getTable(TableName.valueOf("testta‐ble"));
+// Instantiate Get
+Get get1 = new Get(Bytes.toBytes("row1"));
+get.addColumn(Bytes.toBytes("colfam1"), Bytes.toBytes("qual1"));
+
+// There is a fluent Api for this as well
+Get get2 = new Get(Bytes.toBytes("row1"))
+      .setId("GetFluentExample")
+      .setMaxVersions()
+      .setTimeStamp(1)
+      .addColumn(Bytes.toBytes("colfam1"), Bytes.toBytes("qual1"))
+      .addFamily(Bytes.toBytes("colfam2"));
+
+// Retrieve results
+Result result = table.get(get1);
+byte[] val = result.getValue(Bytes.toBytes("colfam1"), Bytes.toBytes("qual1"));
+// Close connection
+table.close();
+connection.close();
+```
+
+Additional methods of the _Get_ class:
+
+    * familySet()/getFamilyMap(): Give you access to the column families and specific columns,
+    * getACL()/setACL(): The Access Control List (ACL) for this operation.
+    * getAttribute()/setAttribute(): Set and get arbitrary attributes associated with this instance of Get
+    * getAttributesMap(): Returns the entire map of attributes, if any are set
+    * getAuthorizations()/setAuthorizations(): Visibility labels for the operation 
+    * getCacheBlocks()/setCacheBlocks(): Specify if the server-side cache should retain blocks that were loaded for this 
+      operation
+    * setCheckExistenceOnly()/is CheckExistenceOnly(): Only check for existence of data, but do not return any of it
+    * setClosestRowBefore()/isClosestRowBefore(): Return all the data for the row that matches the given row key exactly, or 
+      the one that immediately precedes it 
+    * getConsistency()/setConsistency(): The consistency level that applies to the current query instance
+    * getFilter()/setFilter(): The filters that apply to the retrieval operation
+    * getFingerprint(): Compiles details about the instance into a map for debugging, or logging 
+    * getId()/setId(): An ID for the operation, useful for identifying the origin of a request later
+    * getIsolationLevel()/setIsolationLevel(): Specifies the read isolation level for the operation
+    * getMaxResultsPerColumnFamily()/setMaxResultsPerColumnFamily(): Limit the number of cells returned per family
+    * getMaxVersions()/setMaxVersions(): Override the column family setting specifying how many versions of a column to get
+    * getReplicaId()/setReplicaId(): Gives access to the replica ID that should serve the data
+    * getRow(): Returns the row key as specified when creating the Get instance
+    * getRowOffsetPerColumnFamily()/setRowOffsetPerColumnFamily(): Number of cells to skip when reading a row
+    * getTimeRange()/setTimeRange(): Retrieve or set the associated timestamp or time range of the Get instance 
+    * setTimeStamp(): Sets a specific timestamp for the query. Retrieve with getTimeRange()
+    * numFamilies(): Retrieves the size of the family map, containing families added using the addFamily()/addColumn() calls
+    * hasFamilies(): Another helper to check if a family—or column—has been added to the current instance of the Get class
+    * toJSON()/toJSON(int): Converts the first 5 or N columns into a JSON format
+    * toMap()/toMap(int): Converts the first 5 or N columns into a map
+    * toString()/toString(int): Converts the first 5 or N columns to a JSON, or map (if JSON fails due to encoding problems)
+
+`setCacheBlocks()` and `getCacheBlocks()` controls how the read operation is handled on the server-side. Each HBase region
+server has a block cache that efficiently retains recently accessed data for subsequent reads of contiguous information. In
+some events it is better to not engage the cache to avoid too much churn when doing completely random gets.
+`setCheckExistenceOnly()` and `isCheckExistenceOnly()` combination allows the client to check if a specific set of columns,
+or column families are already existent. If multiple checks exists, they are added with the or operator (returns true if one
+exists). The _Table_ class has another way of checking for the existence of data in a table:
+
+```
+boolean exists(Get get) throws IOException
+boolean[] existsAll(List<Get> gets) throws IOException;
+```
+
+`setClosestRowBefore()` and `isClosestRowBefore()` offers some sort of fuzzy matching for rows. Using `setClosestRowBefore()`
+would return the previous row to the one you are looking specifically if it does not find a match. In the case this  
+behaviour is triggered, the entire row is returned and not only a set of columns.
+_getMaxResultsPerColumnFamily()_, _setMaxResultsPerColumnFamily()_, _getRowOffsetPerColumnFamily()_, and
+_setRowOffsetPerColumnFamily()_ works in tandem to allow the client to page through a wide row, setting the maximum amount of
+cells returned by a get request or an optional offset into the row:
+
+```
+Get get1 = new Get(Bytes.toBytes("row1"));
+get1.setMaxResultsPerColumnFamily(10);
+Result result1 = table.get(get1);
+CellScanner scanner1 = result1.cellScanner();
+while (scanner1.advance()) {
+    System.out.println("Get 1 Cell: " + scanner1.current());
+}
+```
+
+The above really works in cells, not columns, so remember that when iterating over the results.
+
+##### The Result class
+
+The result class provides you with the means to ac‐ cess everything that was returned from the server for the given row and
+matching the specified query, such as column family, column qualifier, timestamp, and so on. Some of the methods:
+
+```
+byte[] getRow()
+byte[] getValue(byte[] family, byte[] qualifier) // returns the newest value of a cell
+byte[] value() // returns the data for the newest cell in the first column found (columns are also sorted lexicographically)
+ByteBuffer getValueAsByteBuffer(byte[] family, byte[] qualifier) 
+ByteBuffer getValueAsByteBuffer(byte[] family, int foffset, int flength,byte[] qualifier, int qoffset, int qlength)
+boolean loadValue(byte[] family, byte[] qualifier, ByteBuffer dst) throws BufferOverflowException
+boolean loadValue(byte[] family, int foffset, int flength, byte[] qualifier, int qoffset, int qlength, ByteBuffer dst) 
+        throws BufferOverflowException
+CellScanner cellScanner()
+Cell[] rawCells() // returns the array of Cell instances backing the current Result instance
+List<Cell> listCells() // same than before but in a List format
+boolean isEmpty()
+int size()
+```
+
+Some of the methods to return data clone the underlying byte array so that no modification is possible. Yet others do not and
+you have to take care not to modify the returned arrays. Some of the methods in the Result class are more column oriented,
+for example _getColumnCells()_ method you ask for multiple values of a specific column, allowing you to get multiple versions
+of a given column. Methods that operates in columns are described below:
+
+```
+List<Cell> getColumnCells(byte[] family, byte[] qualifier)
+Cell getColumnLatestCell(byte[] family, byte[] qualifier) // returs the newest cell of the specified column
+Cell getColumnLatestCell(byte[] family, int foffset, int flength, byte[] qualifier, int qoffset, int qlength)
+boolean containsColumn(byte[] family, byte[] qualifier)
+boolean containsColumn(byte[] family, int foffset, int flength, byte[] qualifier, int qoffset, int qlength)
+boolean containsEmptyColumn(byte[] family, byte[] qualifier) 
+boolean containsEmptyColumn(byte[] family, int foffset, int flength,byte[] qualifier, int qoffset, int qlength)
+boolean containsNonEmptyColumn(byte[] family, byte[] qualifier) 
+boolean containsNonEmptyColumn(byte[] family, int foffset, int flength, byte[] qualifier, int qoffset, int qlength)
+```
+
+There is a third set of methods that provide access to the returned data, and are map-oriented:
+
+```
+// returns the entire result set in a Java Map class, here you get only the data in a map, not any accessors or other 
+// internal information of the cells
+NavigableMap<byte[], NavigableMap<byte[], NavigableMap<Long, byte[]>>> getMap()  
+// only includes the latest cell for each column 
+NavigableMap<byte[],  NavigableMap<byte[],  byte[]>>  getNoVersionMap()
+// lets you select the data for a specific column family only
+NavigableMap<byte[], byte[]> getFamilyMap(byte[] family)
+```
+
+Other methods of the Result class:
+
+```
+create() // There is a set of these static methods to help create Result instances if necessary
+copyFrom() // Helper method to copy a reference of the list of cells from one instance to another
+compareResults() // Static method, does a deep compare of two instance, down to the byte arrays
+getExists()/setEx ists() // Optionally used to check for existence of cells only
+getTotalSizeOfCells() // Static method, summarizes the estimated heap size of all contained cells. Uses Cell.heapSize() for each contained cell.
+isStale() // Indicates if the result was served by a region replica, not the main one
+addResults()/get Stats() // This is used to return region statistics, if enabled (default is false).
+toString() // Dump the content of an instance for logging or debugging
+```
+
+##### List of Gets
+
+Another similarity to the _put()_ calls is that you can ask for more than one row using a single request with:
+`Result[] get(List<Get> gets) throws IOException`
+
+This is used as follows:
+
+```
+List<Get> gets = new ArrayList<Get>();
+// Some code to add gets to the list
+Result[] results = table.get(gets);
+// More code
+```
+
+Errors are reported back to you differently than with the Puts. The _get()_ call either returns the said array, matching 
+the same size as the given list by the gets parameter, or throws an exception and not returning a result at all.
+
+#### Delete Method
