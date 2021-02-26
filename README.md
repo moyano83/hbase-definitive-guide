@@ -884,7 +884,190 @@ Result[] results = table.get(gets);
 // More code
 ```
 
-Errors are reported back to you differently than with the Puts. The _get()_ call either returns the said array, matching 
-the same size as the given list by the gets parameter, or throws an exception and not returning a result at all.
+Errors are reported back to you differently than with the Puts. The _get()_ call either returns the said array, matching the
+same size as the given list by the gets parameter, or throws an exception and not returning a result at all.
 
 #### Delete Method
+
+The _Table_ class provides you with a single and multiple delete options.
+
+##### Single Deletes
+
+The method signature for a single delete is:
+
+```
+void delete(Delete delete) throws IOException
+```
+
+To instantiate a _Delete_ there are several options:
+
+```
+Delete(byte[] row)
+Delete(byte[] row, long timestamp)
+// The following two allows you to pass in a larger array, with accompanying offset and length parameter
+Delete(final byte[] rowArray, final int rowOffset, final int rowLength) 
+Delete(final byte[] rowArray, final int rowOffset, final int rowLength,long ts)
+Delete(final Delete d)
+```
+
+To narrow down what you want to delete, use the following methods:
+
+```
+// removes an entire column family, including all contained columns.
+Delete addFamily(final byte[] family)
+Delete addFamily(final byte[] family, final long timestamp) // narrowed  on timestamp
+Delete addFamilyVersion(final byte[] family, final long timestamp)
+Delete addColumns(final byte[] family, final byte[] qualifier) // Operates in columns
+Delete addColumns(final byte[] family, final byte[] qualifier, final long timestamp) // narrowed on timestamp
+Delete addColumn(final byte[] family, final byte[] qualifier) // narrow to a single column (newest)
+Delete addColumn(byte[] family, byte[] qualifier, long timestamp) // narrowed by timestamp
+void setTimestamp(long timestamp) // Set timestamp for all subsequent addXXX(...) calls
+```
+
+The handling of the explicit versus implicit timestamps is the same for all _addXYZ()_ methods, if not specified, the
+optional one from the constructor or a previous call to _setTimestamp()_ is used. If that was not set either, then
+_HConstants.LATEST_TIME STAMP_ is used, meaning all versions will be affected by the delete. Not setting the timestamp forces
+the server to retrieve the latest timestamp on the server side on your be‐ half. This is slower than performing a delete with
+an explicit timestamp. For advanced user there is an additional method
+available `Delete addDeleteMarker(Cell kv) throws IOException`, which checks that the provided _Cell_ instance is of type
+delete, and that the row key matches the one of the current delete instance. If that holds true, the cell is added as-is to
+the family it came from. The _Delete_ class has other methods too:
+
+    * cellScanner(): Provides a scanner over all cells available in this instance.
+    * getACL()/setACL(): The ACLs for this operation (might be null).
+    * getAttribute()/setAttribute(): Set and get arbitrary attributes associated with this instance of Delete
+    * getAttributesMap(): Returns the entire map of attributes, if any are set
+    * getCellVisibility()/setCellVisibility(): The cell level visibility for all included cells
+    * getClusterIds()/setClusterIds(): The cluster IDs as needed for replication purposes
+    * getDurability()/setDurability(): The durability settings for the mutation
+    * getFamilyCellMap()/setFamilyCellMap(): The list of all cells of this instance
+    * getFingerprint(): Compiles details about the instance into a map for debugging, or logging 
+    * getId()/setId(): An ID for the operation, useful for identifying the origin of a request later 
+    * getRow(): Returns the row key as specified when creating the Delete instance 
+    * getTimeStamp(): Retrieves the associated timestamp of the Delete instance 
+    * getTTL()/setTTL(): Not supported by Delete, will throw an exception when setTTL() is called 
+    * heapSize(): Computes the heap space required for the current Delete instance including data and internal structures
+    * isEmpty(): Checks if the family map contains any Cell instances
+    * numFamilies(): Returns the number of Cell instances that will be
+    * size(): applied with this Delete 
+    * toJSON()/toJSON(int): Converts the first 5 or N columns into a JSON format
+    * toMap()/toMap(int): Converts the first 5 or N columns into a map. More detailed than what getFingerprint() returns 
+    * toString()/toString(int): Converts the first 5 or N columns into a JSON, or map (if JSON fails due to encoding)
+
+##### List of Deletes
+
+In the _Table_ class there is a method `void delete(List<Delete> deletes) throws IOException` similar to the Put list seing
+before. Just as with the other list-based operation, you cannot make any assumption regarding the order in which the deletes
+are applied on the remote servers. The API is free to reorder them to make efficient use of the single RPC per affected
+region server. Regarding the error handling, the list-based _delete()_ call is modified to only contain the failed delete
+instances when the call returns. In other words, when everything has succeeded, the list will be empty. The call also throws
+the exception—if there was one—reported from the remote servers (for example if a wrong familly name is passed) with an
+exception of type _RetriesExhaustedWithDetailsException_.
+
+##### Atomic Check-and-Delete
+
+Delete also comes with server-side read-modify-write functionality availale in the _Table_ class:
+
+```
+boolean checkAndDelete(byte[] row, byte[] family, byte[] qualifier, byte[] value, Delete delete) throws IOException
+boolean checkAndDelete(
+    byte[] row, 
+    byte[] family, 
+    byte[] qualifier, 
+    CompareFilter.CompareOp compareOp, 
+    byte[] value, 
+    Delete delete) throws IOException
+```
+
+You need to specify the row key, column family, qualifier, and value to check before the delete operation is performed. The
+first call implies that the given value has to equal to the stored one. The second call lets you specify the actual
+comparison operator. If the test fails, nothing is deleted and the call returns false. Using null as the value parameter
+triggers the nonexistence test, which is successful if the column specified does not exist. You can only perform the check
+and modify on the same row, if you pass a _Delete_ instance pointing to a different row, the operation will fail.
+
+#### Append Method
+
+The _append()_ method does an atomic read-modify-write operation, adding data to a column. The API method provided is:
+
+`Result append(final Append append) throws IOException`
+
+Constructors:
+
+```
+Append(byte[] row)
+Append(final byte[] rowArray, final int rowOffset, final int rowLength) // subset, plus the necessary offset and length
+Append(Append a) // clone Append
+```
+
+Once the instance is created, you add details of the column you want to append to, using one of these calls:
+
+```
+Append add(byte[] family, byte[] qualifier, byte[] value) // column family, qualifier name and value to add to the existing 
+Append add(final Cell cell) // copies all of these parameters from an existing cell instance
+```
+
+You must call one of those functions, or else a subsequent call to _append()_ will throw an exception. One special option
+of _append()_ is to not return any data from the servers. This is accomplished with this pair of methods (usually, the newly
+updated cells are returned to the caller):
+
+```
+Append setReturnResults(boolean returnResults) // will return null instead
+boolean isReturnResults()
+```
+
+Most of the methods of the _Append_ class comes from the superclasses and have been mentioned before.
+
+#### Mutate Method
+
+##### Single Mutations
+
+If you want to update a row across operations, and doing so atomically, you can use _mutateRow()_, which has the following
+signature `void mutateRow(final RowMutations rm) throws IOException`. The _RowMutations_ based parameter is a container that
+accepts either _Put_ or _Delete_ instance, and then applies both in one call to the server-side data. The list of available
+constructors and methods for the RowMutations class is:
+
+```
+RowMutations(byte[] row)
+add(Delete)
+add(Put)
+getMutations()
+getRow()
+```
+
+An example of usage:
+
+```
+Put put = new Put(Bytes.toBytes("row1"));
+put.addColumn(Bytes.toBytes("colfam1"), Bytes.toBytes("qual1"), 4, Bytes.toBytes("val99")); // adds value
+put.addColumn(Bytes.toBytes("colfam1"), Bytes.toBytes("qual4"),4, Bytes.toBytes("val100")); // add new familly
+
+Delete delete = new Delete(Bytes.toBytes("row1")); 
+delete.addColumn(Bytes.toBytes("colfam1"), Bytes.toBytes("qual2")); // Delete column familly
+
+RowMutations mutations = new RowMutations(Bytes.toBytes("row1")); 
+mutations.add(put);
+mutations.add(delete);
+table.mutateRow(mutations); // perform the operations atomically
+```
+
+##### Atomic Check-and-Mutate
+
+Again, equivalent calls for mutations that give you access to server-side read-modify-write functionality:
+
+```
+// You need to specify the row key, column family, qualifier, and value to check before the list of mutations is applied
+// If test fail, nothing is applied and the call returns a false, otherwise it returns true.
+public boolean checkAndMutate(
+        final byte[] row, 
+        final byte[] family, 
+        final byte[] qualifier, 
+        final CompareOp compareOp, 
+        final byte[] value, 
+        final RowMutations rm) throws IOException
+```
+
+Again, using null as the value parameter triggers the non‐existence test, that is, the check is successful if the column
+specified does not exist. You can only perform the check-and-modify operation on the same row or else it will throw an
+exception. 
+
+### Batch Operations
