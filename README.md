@@ -5,6 +5,7 @@
 1. [Chapter 1: Introduction](#Chapter1)
 2. [Chapter 1: Installation](#Chapter2)
 3. [Chapter 3: Client API: The Basics](#Chapter3)
+4. [Chapter 4: Client API: Advanced Features](#Chapter4)
 
 ## Chapter 1: Introduction<a name="Chapter1"></a>
 
@@ -400,8 +401,8 @@ String toString()
 ```
 
 This class helps in generating useful information collections for logging and general debugging purposes. The intermediate
-OperationWithAttributes class is ex‐ tending the above Operation class, implements the Attributes inter‐ face, and is adding
-the following methods, which are used in conjunction:
+OperationWithAttributes class is extending the above Operation class, implements the Attributes interface, and is adding the
+following methods, which are used in conjunction:
 
 ```
 OperationWithAttributes setId(String id)
@@ -471,7 +472,7 @@ On the read side, we can control how consistent is the data read, the options ar
     * TIMELINE: Replicas may not be consistent with each other, updates are guaranteed to be applied in order in all replicas
 
 HBase always writes and commits all changes strictly serially, which means that completed transactions are always presented
-in the exact same order. The _isStale()_ method is used to check if we have retrieved data from a replica, not the
+in the exact same order. The `isStale()` method is used to check if we have retrieved data from a replica, not the
 authoritative master.
 
 On the read side, you can also set the isolation level (on the Query superclass). The options are:
@@ -699,7 +700,7 @@ This operations is split into single or multiple row retrieval.
 
 ##### Single Gets
 
-the method that is used to retrieve specific values from a HBase table: `Result get(Get get) throws IOException`. A _get()_
+the method that is used to retrieve specific values from a HBase table: `Result get(Get get) throws IOException`. A `get()`
 operation is bound to one specific row, but can retrieve any number of columns and/or cells contained therein.  
 Constructors of _Get_ class:
 
@@ -791,8 +792,8 @@ boolean[] existsAll(List<Get> gets) throws IOException;
 `setClosestRowBefore()` and `isClosestRowBefore()` offers some sort of fuzzy matching for rows. Using `setClosestRowBefore()`
 would return the previous row to the one you are looking specifically if it does not find a match. In the case this  
 behaviour is triggered, the entire row is returned and not only a set of columns.
-_getMaxResultsPerColumnFamily()_, _setMaxResultsPerColumnFamily()_, _getRowOffsetPerColumnFamily()_, and
-_setRowOffsetPerColumnFamily()_ works in tandem to allow the client to page through a wide row, setting the maximum amount of
+`getMaxResultsPerColumnFamily()`, `setMaxResultsPerColumnFamily()`, `getRowOffsetPerColumnFamily()`, and
+`setRowOffsetPerColumnFamily()` works in tandem to allow the client to page through a wide row, setting the maximum amount of
 cells returned by a get request or an optional offset into the row:
 
 ```
@@ -809,7 +810,7 @@ The above really works in cells, not columns, so remember that when iterating ov
 
 ##### The Result class
 
-The result class provides you with the means to ac‐ cess everything that was returned from the server for the given row and
+The result class provides you with the means to access everything that was returned from the server for the given row and
 matching the specified query, such as column family, column qualifier, timestamp, and so on. Some of the methods:
 
 ```
@@ -830,7 +831,7 @@ int size()
 
 Some of the methods to return data clone the underlying byte array so that no modification is possible. Yet others do not and
 you have to take care not to modify the returned arrays. Some of the methods in the Result class are more column oriented,
-for example _getColumnCells()_ method you ask for multiple values of a specific column, allowing you to get multiple versions
+for example `getColumnCells()` method you ask for multiple values of a specific column, allowing you to get multiple versions
 of a given column. Methods that operates in columns are described below:
 
 ```
@@ -872,7 +873,7 @@ toString() // Dump the content of an instance for logging or debugging
 
 ##### List of Gets
 
-Another similarity to the _put()_ calls is that you can ask for more than one row using a single request with:
+Another similarity to the `put()` calls is that you can ask for more than one row using a single request with:
 `Result[] get(List<Get> gets) throws IOException`
 
 This is used as follows:
@@ -884,7 +885,7 @@ Result[] results = table.get(gets);
 // More code
 ```
 
-Errors are reported back to you differently than with the Puts. The _get()_ call either returns the said array, matching the
+Errors are reported back to you differently than with the Puts. The `get()` call either returns the said array, matching the
 same size as the given list by the gets parameter, or throws an exception and not returning a result at all.
 
 #### Delete Method
@@ -924,10 +925,10 @@ Delete addColumn(byte[] family, byte[] qualifier, long timestamp) // narrowed by
 void setTimestamp(long timestamp) // Set timestamp for all subsequent addXXX(...) calls
 ```
 
-The handling of the explicit versus implicit timestamps is the same for all _addXYZ()_ methods, if not specified, the
-optional one from the constructor or a previous call to _setTimestamp()_ is used. If that was not set either, then
+The handling of the explicit versus implicit timestamps is the same for all `addXYZ()` methods, if not specified, the
+optional one from the constructor or a previous call to `setTimestamp()` is used. If that was not set either, then
 _HConstants.LATEST_TIME STAMP_ is used, meaning all versions will be affected by the delete. Not setting the timestamp forces
-the server to retrieve the latest timestamp on the server side on your be‐ half. This is slower than performing a delete with
+the server to retrieve the latest timestamp on the server side on your behalf. This is slower than performing a delete with
 an explicit timestamp. For advanced user there is an additional method
 available `Delete addDeleteMarker(Cell kv) throws IOException`, which checks that the provided _Cell_ instance is of type
 delete, and that the row key matches the one of the current delete instance. If that holds true, the cell is added as-is to
@@ -959,7 +960,7 @@ the family it came from. The _Delete_ class has other methods too:
 In the _Table_ class there is a method `void delete(List<Delete> deletes) throws IOException` similar to the Put list seing
 before. Just as with the other list-based operation, you cannot make any assumption regarding the order in which the deletes
 are applied on the remote servers. The API is free to reorder them to make efficient use of the single RPC per affected
-region server. Regarding the error handling, the list-based _delete()_ call is modified to only contain the failed delete
+region server. Regarding the error handling, the list-based `delete()` call is modified to only contain the failed delete
 instances when the call returns. In other words, when everything has succeeded, the list will be empty. The call also throws
 the exception—if there was one—reported from the remote servers (for example if a wrong familly name is passed) with an
 exception of type _RetriesExhaustedWithDetailsException_.
@@ -987,7 +988,7 @@ and modify on the same row, if you pass a _Delete_ instance pointing to a differ
 
 #### Append Method
 
-The _append()_ method does an atomic read-modify-write operation, adding data to a column. The API method provided is:
+The `append()` method does an atomic read-modify-write operation, adding data to a column. The API method provided is:
 
 `Result append(final Append append) throws IOException`
 
@@ -1006,8 +1007,8 @@ Append add(byte[] family, byte[] qualifier, byte[] value) // column family, qual
 Append add(final Cell cell) // copies all of these parameters from an existing cell instance
 ```
 
-You must call one of those functions, or else a subsequent call to _append()_ will throw an exception. One special option
-of _append()_ is to not return any data from the servers. This is accomplished with this pair of methods (usually, the newly
+You must call one of those functions, or else a subsequent call to `append()` will throw an exception. One special option
+of `append()` is to not return any data from the servers. This is accomplished with this pair of methods (usually, the newly
 updated cells are returned to the caller):
 
 ```
@@ -1021,7 +1022,7 @@ Most of the methods of the _Append_ class comes from the superclasses and have b
 
 ##### Single Mutations
 
-If you want to update a row across operations, and doing so atomically, you can use _mutateRow()_, which has the following
+If you want to update a row across operations, and doing so atomically, you can use `mutateRow()`, which has the following
 signature `void mutateRow(final RowMutations rm) throws IOException`. The _RowMutations_ based parameter is a container that
 accepts either _Put_ or _Delete_ instance, and then applies both in one call to the server-side data. The list of available
 constructors and methods for the RowMutations class is:
@@ -1068,6 +1069,273 @@ public boolean checkAndMutate(
 
 Again, using null as the value parameter triggers the non‐existence test, that is, the check is successful if the column
 specified does not exist. You can only perform the check-and-modify operation on the same row or else it will throw an
-exception. 
+exception.
 
 ### Batch Operations
+
+Now we will have a look at the API calls to batch different operations across multiple rows. As a note, avoid the previously
+described list calls and use the batch counterpart instead. The following methods on the _Table_ class are batch:
+
+```
+// Row is a superclass of all Mutation classes
+void batch(final List<? extends Row> actions, final Object[] results) throws IOException, InterruptedException
+void batchCallback(final List<? extends Row> actions, final Object[] results, final Batch.Callback<R> callback) 
+    throws IOException, InterruptedException
+```
+
+The general contract of the batch calls is that they return a best match result per input action, and the possible types are:
+
+    * null: The operation has failed to communicate with the remote server 
+    * Empty Result: Returned for successful Put and Delete operations
+    * Result: Returned for successful Get operations, but may also be empty when there was no matching row or column
+    * Throwable: In case the servers return an exception for the operation it is returned to the client as-is
+
+All the operations are grouped by the destination region servers first and then sent to the servers. Also, all batch
+operations are executed before the results are checked: even if you receive an error for one of the actions, all the other
+ones have been applied.
+
+### Scans
+
+#### Introduction
+
+Scans are similar to cursors in database systems, similar to the _Get_ operations. Since scans are similar to iterators,
+there is no `scan()` call, but rather a `getScanner()` which returns a _ResultScanner_ instance that you can iterate over.
+The available methods are:
+
+```
+ResultScanner getScanner(Scan scan) throws IOException
+ResultScanner getScanner(byte[] family) throws IOException 
+ResultScanner getScanner(byte[] family, byte[] qualifier) throws IOException
+```
+
+The Scan class has the following constructors:
+
+```
+Scan()
+Scan(byte[] startRow, Filter filter)
+Scan(byte[] startRow)
+Scan(byte[] startRow, byte[] stopRow)
+Scan(Scan scan) throws IOException
+Scan(Get get)
+```
+
+Instead of specifying a single row key, you now can optionally provide a _startRow_ (inclusive) parameter—defining the row
+key where the scan begins to read from the HBase table. The optional _stopRow_ (exclusive) parameter can be used to limit the
+scan to a specific row key where it should conclude the reading. With scans, you do not need to have an exact match for
+either of these rows. Instead, the scan will match the first row key that is equal to or larger than the given start row. If
+no start row is provided, it will start from the beginning of the table. It will also end its work when the current row key
+is equal to or greater than the optional stop row. If no stop row was specified, the scan will run to the end of the table.
+The get and scan functionality is the same on the server side, but for a _Get_ the scan has to include the stop row into the
+scan, since both, the start and stop row are set to the same value. The _Get_ instance would return true as well when the
+method `boolean isGetScan()` is called. To narrow down the scan results, you can use one of the following methods:
+
+```
+Scan addFamily(byte [] family)
+Scan addColumn(byte[] family, byte[] qualifier)
+```
+
+Scan has other methods that are selective in nature, here the first set that center around the cell versions returned:
+
+```
+Scan setTimeStamp(long timestamp) throws IOException // shorthand for setting a time range with setTimeRange(time, time + 1)
+Scan setTimeRange(long minStamp, long maxStamp) throws IOException
+TimeRange getTimeRange()
+Scan setMaxVersions()
+Scan setMaxVersions(int maxVersions)
+int getMaxVersions()
+```
+
+The next set of methods relate to the rows that are included in the scan:
+
+```
+Scan setStartRow(byte[] startRow)
+byte[] getStartRow() // might return null
+Scan setStopRow(byte[] stopRow)
+byte[] getStopRow() // might return null
+
+// Shorthand to set the start row to the value of the rowPrefix parameter and the stop row to the next key that is 
+// greater than the current key
+Scan setRowPrefixFilter(byte[] rowPrefix)
+```
+
+Next, there are methods around filters (combination of time range and row based selectors):
+
+```
+Filter getFilter()
+Scan setFilter(Filter filter)
+boolean hasFilter()
+```
+
+And finally more specific methods for advanced usage:
+
+```
+Scan setReversed(boolean reversed) // Iterate the scan in reverse order if set to true, slower (descending order)
+boolean isReversed() // returns if the scan is reversed
+Scan setRaw(boolean raw) // Special mode, the scan returns every cell it finds, including deleted
+boolean isRaw()
+Scan setSmall(boolean small) // Deals with scans that read a very small set of data which can be returned in a single RPC
+boolean isSmall()
+```
+
+When using reverse scans you need to flip around any start and stop row value, or you will not find anything at all. Calling
+`setSmall(true)` on a scan instance instructs the client API to not do the usual open scanner, fetch data, and close scanner
+combination of remote procedure calls, but do them in one single call (size should ideally be less than one data block).
+
+#### The ResultScanner Class
+
+Scans usually do not ship all the matching rows in one RPC to the client, but instead do this on a per-row basis, the
+_ResultScanner_ converts the scan into a get-like operation, wrapping the Result instance for each row into an iterator:
+
+```
+Result next() throws IOException // Returns null if you exhaust the table
+Result[] next(int nbRows) throws IOException // The result array might be shorter if there were not enough rows left
+void close() // Required to release all the resources a scan may hold 
+```
+
+Release a scanner instance as quickly as possible as an open scanner holds quite a few resources on the server side. This
+time can be configured with the following property in the hbase-site.xml:
+
+```xml
+
+<property>
+    <name>hbase.client.scanner.timeout.period</name>
+    <value>120000</value>
+</property>
+```
+
+#### Scanner Caching
+
+Each call to `next()` or `next(int nbRows)` is a separate RPC for every row, but sometimes it makes sense to fetch more than
+one row per RPC if possible. This is called _scanner caching_ and is enabled by default. _hbase.client.scanner.caching_
+controls the default caching for all scans (defaults to 100). This can be overwritten at the _Scan_ class with the methods:
+
+```
+void setCaching(int caching)
+int getCaching()
+```
+
+Values to set here should be chosen carefully, because when the time taken to transfer the rows to the client, or to process
+the data on the client, exceeds the configured scanner lease threshold, you will end up receiving a lease expired error, in
+the form of a _ScannerTimeoutException_ being thrown. If you want to change the lease period setting you need to add the
+appropriate configuration key to the hbase-site.xml file on the region servers.
+
+#### Scanner Batching
+
+The previous technique of caching doesn't work well when the rows to retrieve are huge, but in this situations you can use
+batching, which is configurable at the _Scan_ class:
+
+```
+void setBatch(int batch)
+int getBatch()
+```
+
+Batching works at cell level, and controls how many cells are retrieved for every call to `next()` made. When a row contains
+more cells than the value you used for the batch, you will get the entire row piece by piece, with each next Result returned
+by the scanner. The combination of scanner caching and batch size can be used to control the number of RPCs required to scan
+the row key range selected.
+
+Batching cannot be combined with filters that return true from their `hasFilterRow()` method as filters can not deal with
+partial results, this is, the row being chunked into batches. It needs to see the entire row to make a filtering decision.
+Another combination disallowed is batching with small scans. If you try to set the scan batching and small scan flag
+together, you will receive an _IllegalArgumentException_.
+
+#### Slicing Rows
+
+The following methods are available on the _Scan_ class to slice a table:
+
+```
+Scan setMaxResultsPerColumnFamily(int limit) // max results per column family limit to stop returning data once reached
+int getMaxResultsPerColumnFamily()
+Scan setRowOffsetPerColumnFamily(int offset) // offset (number of cells) to start from a specific column
+int getRowOffsetPerColumnFamily()
+Scan setMaxResultSize(long maxResultSize) // sets an upper size limit in bytes to the data returned by the scan
+long getMaxResultSize()
+```
+
+#### Load Column Families on Demand
+
+Scans have another advanced feature, loading column families on demand. This is controlled by the following methods:
+
+```
+Scan setLoadColumnFamiliesOnDemand(boolean value)
+Boolean getLoadColumnFamiliesOnDemandValue()
+boolean doLoadColumnFamiliesOnDemand()
+```
+
+This functionality is a read optimization, useful then for use-cases with a dependency between data in those families. This
+is achieved through calling `setLoadColumnFamiliesOnDemand(true)` and then passing a filter that implements the following
+method, returning a boolean flag `boolean isFamilyEssential(byte[] name) throws IOException`. When the servers scan the data,
+they first set up internal scanners for each column family. If load column families on demand is enabled and a filter set, it
+calls out to the filter and asks it to decide if an included column family is to be scanned or not.
+
+#### Scanner Metrics
+
+The _Scan_ class provides functionality to access metrics on the operation through the following methods:
+
+```
+Scan setScanMetricsEnabled(final boolean enabled)
+boolean isScanMetricsEnabled()
+ScanMetrics getScanMetrics()
+```
+
+For example, to find out the number of RPCs calls used in a _Scan_, you can access the metrics instance:
+
+```
+Scan scan = new Scan().setCatching(....
+ResultScanner scanner = table.getScanner(scan);
+scanner.close();
+...
+ScanMetrics metrics = scan.getScanMetrics();
+System.out.println("RPCs: " + metrics.countOfRPCcalls);
+```
+
+The returned ScanMetrics instance has a set of fields and methods to access the metrics:
+
+    * countOfRPCcalls: The total amount of RPC calls incurred by the scan.
+    * countOfRemoteRPCcalls: The amount of RPC calls to a remote host.
+    * sumOfMillisSecBetweenNexts: The sum of milliseconds between sequential next() calls.
+    * countOfNSRE: Number of NotServingRegionException caught.
+    * countOfBytesInResults: Number of bytes in Result instances returned by the servers.
+    * countOfBytesInRemoteResults: Same as above, but for bytes transferred from remote servers.
+    * countOfRegions: Number of regions that were involved in the scan.
+    * countOfRPCRetries: Number of RPC retries incurred during the scan
+    * countOfRemoteRPCRetries: Same again, but RPC retries for non-local servers.
+
+Metrics are internally collected region by region and accumulated in the _ScanMetrics_ instance of the _Scan_ object.
+
+### Miscellaneous Features
+
+#### The Table Utility Methods
+
+Other available methods on the _Table_ class:
+
+    * void close(): Call the method on work completion to release the resources held
+    * TableName getName(): Convenience method to retrieve the table name and namespace, provided as a TableName instance
+    * Configuration getConfiguration(): allows you to access the configuration in use by the Table instance. Since this 
+      is handed out by reference, you can make changes that are effective immediately
+    * HTableDescriptor getTableDescriptor(): Each table is defined using an instance of the HTableDescriptor class
+
+#### The Bytes Class
+
+Class used to convert native Java types, such as String, or long, into the raw, byte array format HBase supports natively.
+Most methods come in three variations, for example shown here for the _Long_ type:
+
+```
+static long toLong(byte[] bytes)
+static long toLong(byte[] bytes, int offset)
+static long toLong(byte[] bytes, int offset, int length) // length has to match the length of the native type
+```
+
+The API, and HBase internally, store data in larger arrays using, for example, the following call:
+`static int putLong(byte[] bytes, int offset, long val)`
+
+Other methods that are worthy to know:
+
+    * toStringBinary(): converts non-printable data into human-readable hexadecimal numbers
+    * compareTo()/equals(): allow you to compare two byte arrays, returns a comparison value or a boolean respectively
+    * add()/head()/tail(): use these methods to combine two byte arrays
+    * binarySearch(): performs a binary search in the given array of values
+    * incrementBytes(): increments a long value in its byte array representation, as if you used toBytes(long) to create it
+
+
+## Chapter 4: Client API: Advanced Features<a name="Chapter4"></a>
