@@ -1337,5 +1337,475 @@ Other methods that are worthy to know:
     * binarySearch(): performs a binary search in the given array of values
     * incrementBytes(): increments a long value in its byte array representation, as if you used toBytes(long) to create it
 
-
 ## Chapter 4: Client API: Advanced Features<a name="Chapter4"></a>
+
+### Filters
+
+#### Introduction to Filters
+
+You can limit the data retrieved in the _Get_ or _Scan_ operations by passing a _Filter_, used for features such as selection
+of keys, or values, based on regular expressions. The _Filter_ interface is implemented by some provided HBase classes or you
+can define your own, Filters are applied at server side (predicate pushdown).
+
+##### The Filter Hierarchy
+
+The base interface as said before is _Filter_, the abstract class _FilterBase_ contains boilerplate for some common
+functionality and most concrete implementations of the _Filter_ extends from it. Set the filter in the _Get_ or _Scan_
+classes by using the method `setFilter(Filter filter)`. Some implementations of _Filter_ requires some extra parameters on
+instantiation, like the ones extending _CompareFilter_ which asks for two parameters.
+
+Filters have access to the entire row they are applied to, as they might depend on row key, column qualifiers, actual value
+of a column, timestamps, and so on. Filters have no state and cannot span across multiple rows.
+
+##### Comparison Operators
+
+The possible comparison operators for CompareFilter-based filters are listed below:
+
+    * LESS: Match values less than the provided one.
+    * LESS_OR_EQUAL: Match values less than or equal to the provided one.
+    * EQUAL: Do an exact match on the value and the provided one.
+    * NOT_EQUAL: Include everything that does not match the provided value.
+    * GREATER_OR_EQUAL: Match values that are equal to or greater than the provided one.
+    * GREATER: Only include values greater than the provided one.
+    * NO_OP: Exclude everything.
+
+##### Comparators
+
+The second type that you need to provide to _CompareFilter_ classes is a comparator, which is needed to compare various
+values and keys in different ways. These are derived from _ByteArrayComparable_, which implements the Java
+_Comparable_ interface. Some specific examples of these are listed below:
+
+    * LongComparator: Assumes the given value array is a Java Long number and uses Bytes.toLong() to convert it
+    * BinaryComparator: Uses Bytes.compareTo() to compare the current with the provided value
+    * BinaryPrefixComparator: Similar to the above, but does a left hand, prefix-based match using Bytes.compareTo()
+    * NullComparator: Does not compare against an actual value, but checks whether a given one is null, or not null
+    * BitComparator: Performs a bitwise comparison, providing a BitwiseOp enumeration with AND, OR, and XOR operators
+    * RegexStringComparator: Given a regular expression at instantiation, this comparator does a pattern match on the data
+    * SubstringComparator: Treats the value and table data as String instances and performs a contains() check
+
+Some of these constructors take a byte array, to do the binary comparison, while others take a string parameter. The later
+are computationally more expensive.
+
+#### Comparison Filters
+
+The comparison filters takes the comparison operator and comparator instance as described before. The constructor is:  
+`CompareFilter(final CompareOp compareOp, final ByteArrayComparable comparator)`
+Filters based on _CompareFilter_ are doing the opposite than normal filters, which is, defining which elements include in the
+result rather to which ones to exclude.
+
+##### RowFilter
+
+Filter that gives you the ability to filter data based on row keys. Example of usage:
+
+```
+Scan scan = new Scan();
+scan.addColumn(Bytes.toBytes("column_family1"), Bytes.toBytes("column1"));
+// Returns rows using the binary comparator, returns for example row09, row08...
+Filter filter1 = new RowFilter(CompareFilter.CompareOp.LESS_OR_EQUAL, new BinaryComparator(Bytes.toBytes("row10")));
+// Exact match needed to match the regex, for example row-15, row-25...
+Filter filter2 = new RowFilter(CompareFilter.CompareOp.EQUAL,new RegexStringComparator(".*-.5"));
+// Substring comparator,  returns rows that contains '-5', for example row-5, row-50...
+Filter filter3 = new RowFilter(CompareFilter.CompareOp.EQUAL,new SubstringComparator("-5"));
+
+scan.setFilter(filter1);
+ResultScanner scanner = table.getScanner(scan);
+for (Result res : scanner) {
+    System.out.println(res);
+}
+scanner.close();
+```
+
+##### FamilyFilter
+
+Similar to the _RowFilter_, but applies the comparison to the column families available in a row. For example:
+`new FamilyFilter(CompareFilter.CompareOp.LESS, new BinaryComparator(Bytes.toBytes("column_family")))`
+Which filters the columns belonging to the family 'column_family'.
+
+##### QualifierFilter
+
+Similar to the _FamilyFilter_ but filters on column qualifier instead:
+`new QualifierFilter(CompareFilter.CompareOp.LESS_OR_EQUAL, new BinaryComparator(Bytes.toBytes("col-2")))`
+The above example would return columns with names like 'col-1','col-10'... As the comparison is done lexicographically.
+
+##### ValueFilter
+
+Filter that makes it possible to include only cells that have a specific value. For example:
+`new ValueFilter(CompareFilter.CompareOp.EQUAL, new SubstringComparator(".4"))`
+The above example returns cells with values like 'val-1.4','otherval-2.4','yetanotherval-0.4'...
+
+##### DependentColumnFilter
+
+This filter lets you specify a dependent column, or reference column, that controls how other columns are filtered. It uses
+the timestamp of the reference column and includes all other columns that have the same timestamp. The constructors are:
+
+```
+DependentColumnFilter(final byte[] family, final byte[] qualifier)
+DependentColumnFilter(final byte[] family, final byte[] qualifier, final boolean dropDependentColumn)
+DependentColumnFilter(final byte[] family, final byte[] qualifier, final boolean dropDependentColumn, final CompareOp
+    valueCompareOp, final ByteArrayComparable valueComparator)
+```
+
+Think of it as a combination of a _ValueFilter_ and a filter selecting on a reference timestamp. This filter is not
+compatible with the batch feature of the scan operations, that is, setting `Scan.setBatch()` to a number larger than zero.
+The filter needs to see the entire row to do its work, and using batching will not carry the reference column timestamp over
+and would result in erroneous results. This filter is used where applications require client-side timestamps to track
+dependent updates.
+
+#### Dedicated Filters
+
+The second type of supplied filters are based directly on _FilterBase_, many of these filters are only really applicable when
+performing scan operations, since they filter out entire rows.
+
+##### PrefixFilter
+
+All rows with a row key matching this prefix are returned to the client. The constructor is:
+`PrefixFilter(final byte[] prefix)`
+The scan also is actively ended when the filter encounters a row key that is larger than the prefix. Combining this with a
+start row improves the overall performance of the scan as it has knowledge of when to skip the rest of the rows altogether.
+
+##### PageFilter
+
+When you create the instance, you specify a _pageSize_ parameter, which controls how many rows per page should be returned.
+`PageFilter(final long pageSize)`
+There is a fundamental issue with filtering on physically separate servers, as filters runs on different region servers in
+parallel and cannot retain or communicate their current state across those boundaries. Each filter is required to scan at
+least up to _pageCount_ rows before ending the scan. This means a slight inefficiency is given for the Page Filter as more
+rows are reported to the client than necessary. The client code would need to remember the last row that was returned, and
+then, when another iteration is about to start, set the start row of the scan accordingly. Example of usage:
+
+```
+private static final byte[] POSTFIX = new byte[] { 0x00 };
+Filter filter = new PageFilter(15);
+int totalRows = 0;
+byte[] lastRow = null;
+
+while (true) {
+    Scan scan = new Scan();
+    scan.setFilter(filter);
+    if (lastRow != null) {
+        byte[] startRow = Bytes.add(lastRow, POSTFIX);
+        scan.setStartRow(startRow);
+    }
+    ResultScanner scanner = table.getScanner(scan);
+    Result result;
+    while ((result = scanner.next()) != null) {
+        totalRows++;
+        lastRow = result.getRow();
+    }
+    scanner.close();
+}
+```
+
+Because of the lexicographical sorting of the row keys by HBase and the comparison taking care of finding the row keys in
+order, and the fact that the start key on a scan is always inclusive, you need to add an extra zero byte (smallest increment)
+to the previous key. This will ensure that the last seen row key is skipped and the next, in sorting order, is found.
+
+##### KeyOnlyFilter
+
+This filter returns just the keys of each Cell, while omitting the actual data. The constructors of the filter are:
+`KeyOnlyFilter()` and `KeyOnlyFilter(boolean lenAsVal)`, when the latter is used and passed as true, the value returned is
+the length (in bytes) of the data.
+
+##### FirstKeyOnlyFilter
+
+Filter that allows you to get the first column of each row. Typically used by row counter type applications that only need to
+check if a row exists ( if there are no columns, the row ceases to exist). Another possible use case is to set the column
+qualifier to an epoch value, so this would sort the column with the oldest timestamp name as the first to retrieve. Combined
+with this filter, it is possible to retrieve the oldest (or newest if reversed) column from every row using a single scan.
+Another optimization feature provided by the filter is that it indicates to the region server applying the filter that the
+current row is done and that it should skip to the next one.
+
+##### FirstKeyValueMatchingQualifiersFilter
+
+Extension to the _FirstKeyOnlyFilter_, but instead of returning the first found cell, it instead returns all the columns of a
+row, up to a given column qualifier (if it has it, otherwise returns all columns). The constructor is
+`FirstKeyValueMatchingQualifiersFilter(Set<byte[]> qualifiers)`
+Note that you can pass several qualifiers, the filter is instructed to stop emitting cells when encountering one of the
+qualifiers provided.
+
+##### InclusiveStopFilter
+
+The row boundaries of a scan are inclusive for the start row and exclusive for the stop row. This filter includes also the
+specified stop row.
+
+##### FuzzyRowFilter
+
+This filter acts on row keys, but in a fuzzy manner. It needs a list of row keys that should be returned, plus an
+accompanying byte[] array that signifies the importance of each byte in the row key:
+`FuzzyRowFilter(List<Pair<byte[], byte[]>> fuzzyKeysData)`
+The _fuzzyKeysData_ specifies the mentioned significance of a row key byte, by taking one of two values:
+
+    * 0: Indicates that the byte at the same position in the row key must match as-is
+    * 1: Means that the corresponding row key byte does not matter and is always accepted
+
+For example, the row key to find any row with the format `<year_4_digits>_<month_2_digits>_<day_2_digits>` that matches any
+day of february 2021 would be `2021_02_??` and the _fuzzyKeysData_ value is `\x01\x01\x01\x01\x01\x01\x01\x01\x00\x00`. An
+advantage of this filter is that it can likely compute the next matching row key when it gets to an end of a matching one. It
+implements the _getNextCellHint()_ method to help the servers in fast-forwarding to the next range of rows that might match.
+This skips scanning blocks and speeds up the scan operations.
+
+##### ColumnCountGetFilter
+
+This filter retrieves a specific maximum number of columns per row. Set the number using the constructor of the filter:
+`ColumnCountGetFilter(final int n)`
+This filter stops the entire scan once a row has been found that matches the maximum number of columns configured.
+
+##### ColumnPaginationFilter
+
+Similar to the PageFilter, this one can be used to page through columns in a row. Its constructor has two parameters:
+`ColumnPaginationFilter(final int limit, final int offset)`
+It skips all columns up to the number given as offset, and then includes limit columns afterward (superseded by slicing).
+
+##### ColumnPrefixFilter
+
+Similar to the previous one, but acts on columns, the constructor is `ColumnPrefixFilter(final byte[] prefix)`. All columns
+that have the given prefix are then included in the result.
+
+##### MultipleColumnPrefixFilter
+
+Extension to the ColumnPrefixFilter, allows the application to ask for a list of column qualifier prefixes, instead of one.
+`MultipleColumnPrefixFilter(final byte[][] prefixes)`
+
+##### ColumnRangeFilter
+
+This filter acts like two QualifierFilter instances working together, with one checking the lower boundary, and the other
+doing the same for the upper. The constructor is:
+`ColumnRangeFilter(final byte[] minColumn, boolean minColumnInclusive, final byte[] maxColumn, boolean maxColumnInclusive)`
+If you don't pass a min/max column, the first/last column would be used.
+
+##### SingleColumnValueFilter
+
+Use this filter when you have exactly one column that decides if an entire row should be returned or not. You need to first
+specify the column you want to track, and then some value to check against. The constructors offered are:
+
+```
+// Creates a Binary Comparator instance internally on your behalf
+SingleColumnValueFilter(
+    final byte[] family,
+    final byte[] qualifier,
+    final CompareOp compareOp,
+    final byte[] value) 
+// Same parameters we used for the CompareFilter-based classes
+SingleColumnValueFilter(
+    final byte[] family, 
+    final byte[] qualifier, 
+    final CompareOp compareOp, 
+    final ByteArrayComparable comparator)
+// The boolean flags here can also be set by using the class setters after constructing it. The filterIfMissing controls 
+// if rows with no columns after filtering should appear in the results, the second is self-explanatory
+protected SingleColumnValueFilter(
+    final byte[] family, 
+    final byte[] qualifier,
+    final CompareOp compareOp, 
+    ByteArrayComparable comparator, 
+    final boolean filterIfMissing, 
+    final boolean latestVersionOnly)
+```
+
+##### SingleColumnValueExcludeFilter
+
+Extension of the previous one, but the reference column is omitted from the results
+
+##### TimestampsFilter
+
+When you need fine-grained control over what versions are included in the scan result. The constructor is:
+`TimestampsFilter(List<Long> timestamps)`
+The filter is asking for a list of timestamps, it will attempt to retrieve the column versions with the matching timestamps.
+
+##### RandomRowFilter
+
+Filter that includes random rows in the results. The constructor is `RandomRowFilter(float chance)`, where change is a number
+between 0 and 1, a negative value will exclude all rows, while a number greater than 1 will include all.
+
+#### Decorating Filters
+
+It is sometimes useful to modify, or extend, the behavior of a filter to gain additional control over the returned data.
+
+##### SkipFilter
+
+This filter wraps a given filter (must implement `filterKeyValue`) and extends it to exclude an entire row, when the wrapped
+filter hints for a _Cell_ to be skipped. As soon as the underlying filter hints a cell to be omitted, the entire row is
+omitted too. Example below:
+
+```
+Filter filter = new ValueFilter(CompareFilter.CompareOp.NOT_EQUAL, new BinaryComparator(Bytes.toBytes("val-0")));
+Scan scan = new Scan();
+scan.setFilter(new SkipFilter(filter));
+ResultScanner scanner1 = table.getScanner(scan);
+// Other code
+```
+
+##### WhileMatchFilter
+
+Filter that adds the behaviour of aborting the entire scan once a piece of information is filtered.
+
+#### FilterList
+
+_FilterList_ is used when you want to have more than a filter being applied to reduce the data returned to your application.
+The following constructors are available:
+
+```
+FilterList(final List<Filter> rowFilters) // row filters are the filters passed together
+FilterList(final Filter... rowFilters)
+FilterList(final Operator operator) // operator is used to combine the results, defaults to MUST_PASS_ALL
+FilterList(final Operator operator, final List<Filter> rowFilters)
+FilterList(final Operator operator, final Filter... rowFilters)
+```
+
+The possible values for the _Operator_ above are:
+
+    * MUST_PASS_ALL: A value is only included in the result when all filters agree to do so
+    * MUST_PASS_ONE: As soon as a value was allowed to pass one of the filters, it is included in the overall result
+
+Adding filters, after the FilterList instance has been created, can be done with `void addFilter(Filter filter)`. You are
+free to add other FilterList instances to an existing FilterList, thus creating a hierarchy of filters, combined with the
+operators you need. Choose the List type carefully to control the execution of the filters (i.e ordered list).
+
+#### Custom Filters
+
+To implement your own filter, either implementing the abstract _Filter_ class, or extend the provided _FilterBase_ class.
+The _Filter_ interface has an enumeration _ReturnCode_ to be returned by the `filterKeyValue()` method, which values are:
+
+    * INCLUDE: Include the given Cell instance in the result
+    * INCLUDE_AND_NEXT_COL: Include current cell and move to next column, i.e. skip all further versions of the current 
+    * SKIP: Skip the current cell and proceed to the next
+    * NEXT_COL: Skip the remainder of the current column, proceeding to the next. This is used by the TimestampsFilter 
+    * NEXT_ROW: Similar to the previous, but skips the remainder of the current row, moving to the next. Used by RowFilter
+    * SEEK_NEXT_USING_HINT: Some filters want to skip a variable number of cells and use this return code to indicate 
+      that the framework should use the getNextCellHint() method to determine where to skip to. Used by ColumnPrefixFilter 
+
+Most of the provided method of _Filter_ are executed in order, the sequence will be:
+
+    1 - hasFilterRow(): This method does two things: decide if the filter is clashing with other read settings, and call 
+      the filterRow() and filter RowCells() methods subsequently. Forces to load the whole row before calling these methods
+    2 - filterRowKey(byte[] buffer, int offset, int length): Checks the row key. Use it to skip an entire row from processing
+    3 - filterKeyValue(final Cell v): When a row is not filtered (yet), the framework invokes this method for every Cell 
+      that is part of the current row being materialized for the read. The ReturnCode indicates what to do with the cell
+    4 - transfromCell(): Once the cell has passed the check and is available, the transform call allows the filter to 
+      modify the cell, before it is added to the resulting row
+    5 - filterRowCells(List<Cell> kvs): Once all row and cell checks have been performed, this method is called, giving you 
+      access to the list of Cell instances not excluded by the previous filter methods. The _DependentColumnFilter uses it
+    6 - filterRow():After everything else was checked and invoked, the final inspection is performed using filterRow()
+      is reached, returning true afterward. The default false would include the current row in the result
+    7 - reset(): Resets the filter for every new row the scan is iterating over. Called by the server, after a row is read
+    8 - filterAllRemaining(): This method can be used to stop the scan, by returning true. Used by filters for optimization
+
+A filter using _filterRow()_ to filter out an entire row, or filter _RowCells()_ to modify the final list of included cells,
+must also override the _hasRowFilter()_ function to return true. Additional methods on _Filter_;
+
+    * getNextCellHint(): Invoked when the filter’s filterKeyValue() method returns ReturnCode.SEEK_NEXT_USING_HINT. 
+      Use it to skip large ranges of rows—if possible
+    * isFamilyEssential(): Used to avoid unnecessary loading of cells from column families in low-cardinality scans
+    * setReversed()/isReversed(): Indicates the filter direction. A reverse scan must use reverse filters too
+    * toByteArray()/parseFrom(): Used to de-/serialize the filter’s internal state to ship to the servers for application
+
+##### Custom Filter Loading
+
+To use your custom filter, package it in a JAR, and make it available in the region servers. Then there are 2 choices to load
+them:
+
+    * Static Configuration: add the JAR file to the hbase-env.sh, make sure it is loaded in the HBASE_CLASSPATH property
+    * Dynamic Loading: Place the jar in the shared JAR file directory in HDFS defined in the hbase.dynamic.jars.dirproperty 
+      on the hbase-defaults.xml file, which usually points to hdfs://<namenode>/hbase/lib/ 
+      The dynamic loading directory is monitored for changes and will refresh the JAR files locally if they have been updated
+      HBase is currently not able to unload a previously loaded class, so you cannot replace a class with the same name
+
+#### Filter Parser Utility
+
+_ParseFilter_ is a helper class used in all the places where filters need to be described with text and then converted to a
+Java class, like gateway servers, or the _hbase-shell_ like in:
+`hbase(main):001:0> scan 'testtable', { FILTER => "SKIP PrefixFilter('row-2') AND QualifierFilter(<=,'binary:col-2')" }`
+In the above example, the "binary:col-2" parameter is divided in the value handed into the filter 'col-2', and the part
+'binary' which is the way the filter parser class allows you to specify a comparator for filters based on _CompareFilter_.
+Other allowed comparators are:
+
+    * binary: BinaryComparator 
+    * binaryprefix: BinaryPrefixComparator
+    * regexstring: RegexStringComparator
+    * substring: SubstringComparator
+
+Also, the following comparison operators are allowed:
+
+    * `<`: CompareOp.LESS
+    * `<=`: CompareOp.LESS_OR_EQUAL
+    * `>`: CompareOp.GREATER
+    * `>=`: CompareOp.GREATER_OR_EQUAL = CompareOp.EQUAL
+    * `!=`: CompareOp.NOT_EQUAL
+
+Combiners for the filter and precedence ot it is the following:
+
+    * SKIP/WHILE: Wrap filter into SkipFilter, or WhileMatchFilter instance.
+    * AND: corresponds with the MUST_PASS_ALL filter list
+    * OR:  corresponds with the MUST_PASS_ONE filter list
+
+The ParseFilter class only supports the filters that are shipped with HBase.
+
+### Counters
+
+#### Introduction to Counters
+
+HBase offers the _Counter_ class to deal with statistics. HBase has a mechanism to treat columns as counters instead of the
+lock, read, modify, unlock mechanism required otherwise which has as a lot of contention. The client API provides specialized
+methods to do the read-modify-write operation atomically in a single client-side call. Example on how to operate on counters:
+
+```
+
+hbase(main):001:0> create 'counters', 'daily', 'weekly', 'monthly'
+hbase(main):002:0> incr 'counters', '20150101', 'daily:hits', 1 // Increses the counter by 1 -> COUNTER VALUE = 1
+hbase(main):003:0> incr 'counters', '20150101', 'daily:hits', 1 // Increses the counter by 1 -> COUNTER VALUE = 2
+hbase(main):04:0> get_counter 'counters', '20150101', 'daily:hits' // COUNTER VALUE = 2
+```
+
+The `incr` operation is called with `incr '<table>', '<row>', '<column>', [<increment-value>]`. Counters require no
+initialization (set to 0) and by default are incremented by 1 if the increment value is not passed. Counters can
+programmatically be read using `Bytes.toLong()` and `Bytes.toBytes(long)` to encode the value (make sure it is a long). You
+can also read a counter with `hbase(main):005:0> get 'counters', '20150101'` but the result is given in bytes and thus not
+readable, or use `hbase(main):007:0> get_counter 'counters', '20150101', 'daily:hits'` to get it in a readable format.
+
+#### Single Counters
+
+The first type of increment call is for single counters only. The methods, provided by _Table_ are:
+
+```
+long incrementColumnValue(byte[] row, byte[] family, byte[] qualifier, long amount) throws IOException
+long incrementColumnValue(byte[] row, byte[] family, byte[] qualifier, long amount, Durability durability) throws IOException
+```
+
+For example `table.incrementColumnValue(Bytes.toBytes("20110101"),Bytes.toBytes("daily"), Bytes.toBytes("hits"), 1)`
+
+#### Multiple Counters
+
+Another way to increment counters is provided by the `increment()` call of _Table_. The method is
+`Result increment(final Increment increment) throws IOException`
+You must create an instance of the Increment class and fill it with the appropriate details. The constructors provided are:
+
+```
+Increment(byte[] row)
+Increment(final byte[] row, final int offset, final int length)
+Increment(Increment i)
+```
+
+You must provide a row key when instantiating an Increment. There is also the variant for larger arrays with an offset and
+length parameter to extract the row key from, and finally the clonning constructor. After instantiation, add the actual
+counters you want to increment, using these methods:
+
+```
+Increment addColumn(byte[] family, byte[] qualifier, long amount) // Takes the column coordinates
+Increment add(Cell cell) throws IOException // reuses an existing cell, useful if you already have hold of the counter
+```
+
+Counters as opposite of _Put_, don't have a version or timestamp, nor family. Counters takes an optional time range, which is
+passed on to the servers to restrict the internal get operation from retrieving the current counter values:
+
+```
+Increment setTimeRange(long minStamp, long maxStamp) throws IOException
+TimeRange getTimeRange()
+```
+
+The above can be used to expire counters, for example, to partition them by time. Increment gets most of the methods from
+the _Mutation_ class, and add the following:
+
+    * Map<byte[], NavigableMap<byte[], Long>> getFamilyMapOfLongs(): Returns a list of Long instance, instead of cells, for 
+      what was added to this instance so far. The list is indexed by families, and then by column qualifier
+
+### Coprocessors
