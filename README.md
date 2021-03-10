@@ -1809,3 +1809,334 @@ the _Mutation_ class, and add the following:
       what was added to this instance so far. The list is indexed by families, and then by column qualifier
 
 ### Coprocessors
+
+With the coprocessor feature (advanced feature), you can move part of the computation to where the data lives.
+
+#### Introduction to Coprocessors
+
+A coprocessor enables you to run arbitrary code directly on each region server. Coprocessors executes code on a per-region
+basis, giving you trigger-like functionality similar to stored procedures in the RDBMS world. There is a set of implicit
+events that you can use to hook into, or you can also extend the RPC protocol to introduce your own set of calls. You need to
+create the java classes and make them available to the region servers, the same way it has been shown for custom filters.
+HBase provides classes, based on the coprocessor, which you can use to extend from when implementing your own functionality:
+
+    * Endpoint: Endpoints are dynamic extensions to the RPC protocol, adding callable remote procedures
+    * Observer: Comparable to triggers: callback functions are executed when certain events occur. Some implementators:
+        - MasterObserver: to react to administrative or DDL-type operations. These are cluster-wide events
+        - RegionServerObserver: Hooks into commands sent to a region server, and covers region server-wide events
+        - RegionObserver: Used to handle data manipulation events. They are closely bound to the regions of a table
+        - WALObserver: This provides hooks into the write-ahead log processing, which is region server-wide
+        - BulkLoadObserver: Handles events around the bulk loading API. Triggered before and after the loading takes place
+        - EndpointObserver: Whenever an endpoint is invoked by a client, this observer is providing a callback method
+
+Coprocessors can be chained, very similar to what the Java Servlet API does with request filters.
+
+#### The Coprocessor Class Trinity
+
+All user coprocessor classes must be based on the Coprocessor interface. The interface provides two sets of types, which are
+used throughout the framework: the _PRIORITY_ constants, and _State_ enumeration. The priority of a coprocessor defines in
+what order the coprocessors are executed (system-level instances are called before the user-level coprocessors are executed).
+The possible values for this constant are shown below:
+
+    * PRIORITY_HIGHEST: Highest priority, serves as an upper boundary.
+    * PRIORITY_SYSTEM: High priority, used for system coprocessors (Integer.MAX_VALUE / 4).
+    * PRIORITY_USER: For all user coprocessors, which are executed subsequently (Integer.MAX_VALUE / 2).
+    * PRIORITY_LOWEST: Lowest possible priority, serves as a lower boundary (Integer.MAX_VALUE).
+
+Within each priority level, there is also the notion of a sequence number, which keeps track of the order in which the
+coprocessors were loaded. the Coprocessor interface offers two calls:
+
+```
+void start(CoprocessorEnvironment env) throws IOException
+void stop(CoprocessorEnvironment env) throws IOException
+```
+
+The provided Coprocessor Environment instance is used to retain the state across the lifespan of the coprocessor instance. A
+coprocessor instance is always contained in a provided environment, which provides the following methods:
+
+```
+String getHBaseVersion() // Returns the HBase version
+int getVersion() // Returns the version of the Coprocessor interface.
+Coprocessor getInstance() // Returns the loaded coprocessor instance.
+int getPriority() // Provides the priority level of the coprocessor.
+int getLoadSequence() // Sequence number of the coprocessor. Set when the instance is loaded and reflects the execution order
+Configuration getConfiguration() // Provides access to the current, server-wide configuration.
+// Returns a Table implementation for the given table name. Allows the coprocessor to access the actual table data
+HTableInterface getTable(TableName tableName) 
+// Same than the above but allows the specification of a custom ExecutorService instance.
+HTableInterface getTable(TableName tableName, ExecutorService service)
+```
+
+Each step in the process has a well known state. The life-cycle state values provided by the coprocessor interface are:
+
+    * UNINSTALLED: The coprocessor is in its initial state. It has no environment yet, nor is it initialized
+    * INSTALLED: The instance is installed into its environment
+    * STARTING: The coprocessor is about to be started, its start() method is about to be invoked
+    * ACTIVE: Once the start() call returns, the state is set to active
+    * STOPPING: The state set just before the stop() method is called
+    * STOPPED: Once stop() returns control to the framework, the state of the coprocessor is set to stopped
+
+The _CoprocessorHost_ class maintains all the coprocessor instances and their dedicated environments. The trinity of
+_Coprocessor_, _CoprocessorEnvironment_, and _CoprocessorHost_ forms the basis for the classes that implement the advanced
+functionality of HBase, provide the life-cycle support for the coprocessors, manage their state, and offer the environment
+for them to execute as expected.
+
+#### Coprocessor Loading
+
+You can either configure coprocessors to be loaded in a static way (uses the configuration files and table schemas), or load
+them dynamically while the cluster is running (uses only the table schemas). There is also a cluster-wide switch that allows
+you to disable all coprocessor loading, controlled by the following two configuration properties:
+
+    * hbase.coprocessor.enabled: Defaults to true, setting this property to false stops the servers from loading any of them 
+    * hbase.coprocessor.user.enabled: Defaults to true, controls the loading of user table coprocessors only
+
+##### Loading from Configuration
+
+You can configure globally in _hbase-site.xml_ file, which coprocessors are loaded when HBase starts:
+
+```xml
+
+<property>
+    <name>PROCESSOR_TYPE</name>
+    <value>SOME_PROCESSOR_FULLY_QUALIFIED_CLASS_NAME</value>
+</property>
+```
+
+The order of the classes in each configuration property is important, as it defines the execution order. All of these
+coprocessors are loaded with the system priority. The possible values for the PROCESSOR_TYPE above are:
+
+| Property | Coprocessor Host | Server Type |
+| -------- | ---------------- | ----------- |
+| hbase.coprocessor.master.classes| MasterCoprocessorHost | Master Server |
+| hbase.coprocessor.regionserver.classes| RegionServerCoprocessorHost | Region Server |
+| hbase.coprocessor.region.classes| RegionCoprocessorHost | Region Server |
+| hbase.coprocessor.user.region.classes| RegionCoprocessorHost | Region Server |
+| hbase.coprocessor.wal.classes| WALCoprocessorHost | Region Server |
+
+When a coprocessor loaded from the configuration fails to start, it will cause the entire server process to be aborted.
+
+##### Loading from Table Descriptor
+
+The other option to define which coprocessors to load is the table descriptor. As this is per table, the coprocessors defined
+here are only loaded for regions of that table and only by the region servers hosting these regions. You need to add their
+definition to the table descriptor using either:
+
+    * HTableDescriptor.setValue(): You need to create a key that must start with _COPROCESSOR_, and the value has to conform 
+      to the following format: 
+      `[<path-to-jar>(optional)]|<classname>(required)|[<priority>(optional)][|key1=value1, key2=value2,.. .(optional)]`. 
+      The key is a combination of the prefix _COPROCESSOR_, a dollar sign as a divider, and an ordering number, i.e: 
+      `COPROCESSOR$1`
+    * HTableDescriptor.addCoprocessor(): This will look for the highest assigned number and use the next free one after that
+
+An example of how to add a coprocessor programatically is shown below:
+
+```
+HTableDescriptor htd=new HTableDescriptor(TableName.valueOf("testtable"));
+        htd.addFamily(new HColumnDescriptor("colfam1"));
+        htd.setValue("COPROCESSOR$1","|"+RegionObserverExample.class.getCanonicalName()+"|"+Coprocessor.PRIORITY_USER);
+
+Admin admin=connection.getAdmin();
+admin.createTable(htd);
+```
+
+Using the `addCoprocessor()` method:
+
+```
+HTableDescriptor htd=new HTableDescriptor(tableName)
+        .addFamily(new HColumnDescriptor("colfam1"))
+        .addCoprocessor(RegionObserverExample.class.getCanonicalName(),null,Coprocessor.PRIORITY_USER,null);
+
+Admin admin=connection.getAdmin();
+admin.createTable(htd);
+```
+
+Once the table is enabled and the regions are opened, the framework will first load the configuration coprocessors and then
+the ones defined in the table descriptor. For table coprocessors there is a configuration property named
+_hbase.coprocessor.abortonerror_, indicating what you want to happen if an er‐ ror occurs during the initialization of a
+coprocessor class (defaults true).
+
+##### Loading from HBase Shell
+
+If you want to load coprocessors while HBase is running, you can use the table descriptor and the alter call, provided by the
+administrative API:
+`hbase> alter 'test:usertable', 'coprocessor' => 'file:///test.jar | coprocessor.SequentialIdGeneratorObserver|'`, and find
+the result with `hbase> describe 'testqauat:usertable'`. To remove a coprocessor dinamically, you can use
+`hbase> alter 'test:usertable', METHOD => 'table_att_unset', NAME => 'coprocessor$1'`.
+
+#### Endpoints
+
+Endpoints solve a problem with moving data for analytical queries, that would benefit from precalculating intermediate
+results where the data resides, and just ship the results back to the client.
+
+##### The Service Interface
+
+Endpoints are implemented as an extension to the RPC protocol between the client and server. The payload is serialized as a
+Protobuf message and sent from client to server (and back again) using the provided coprocessor services API. In order to
+provide an endpoint to clients, a coprocessor generates a Protobuf implementation that extends the Service class. This
+service can define any methods that the coprocessor wishes to expose. Using the generated classes, you can communicate with
+the coprocessor instances via the following calls, provided by _Table_:
+
+```
+CoprocessorRpcChannel coprocessorService(byte[] row)
+<T extends Service, R> Map<byte[],R> coprocessorService(
+    final Class<T> service,
+    byte[] startKey, 
+    byte[] endKey, 
+    final Batch.Call<T,R> callable) throws ServiceException, Throwable
+<T extends Service, R> void coprocessorService(
+    final Class<T> service,
+    byte[] startKey, 
+    byte[] endKey, 
+    final Batch.Call<T,R> callable,
+    final Batch.Callback<R> callback) throws ServiceException, Throwable
+<R extends Message> Map<byte[], R> batchCoprocessorService(
+    Descriptors.MethodDescriptor methodDescriptor, 
+    Message request,
+    byte[] startKey, 
+    byte[] endKey, 
+    R responsePrototype) throws ServiceException, Throwable
+<R extends Message> void batchCoprocessorService(
+    Descriptors.MethodDescriptor methodDescriptor,
+    Message request, 
+    byte[] startKey, 
+    byte[] endKey, 
+    R responsePrototype,
+    Batch.Callback<R> callback) throws ServiceException, Throwable
+```
+
+Since Service instances are associated with individual regions within a table, the client RPC calls must ultimately identify
+which regions should be used in the service’s method invocations. The coprocessor RPC calls use row keys to identify which
+regions should be used for the method invocations. The call options are:
+
+    * Single Region:This is done by calling coprocessorService() with a single row key. This returns an instance of the 
+      CoprocessorRpcChannel class, which directly extends Protobuf classes. It can be used to invoke any endpoint call 
+      linked to the region containing the specified row. Note that the row does not need to exist: the region selected is 
+      the one that does or would contain the given key
+    * Ranges of Regions:You can call coprocessorService() with a start row key and an end row key. All regions in the table 
+      from the one containing the start row key to the one containing the end row key (inclusive) will be used as the 
+      endpoint targets. This is done in parallel up to the amount of threads configured in the executor pool instance in use
+    * Batched Regions:If you call batchCoprocessorService() instead, you still parallelize the execution across all regions
+      but calls to the same region server are sent together in a single invocation. This will cut down the number of network 
+      roundtrips, and is especially useful when the expected results of each endpoint invocation is very small
+
+There is two ways we can invoke a _Service_ from the _Table_ class, clients implement _Batch.Call_ to call methods of the
+actual _Service_ implementation instance, the interface’s `call()` method will be called once per selected region, pass‐ ing
+the _Service_ implementation instance for the region as a parameter. Clients can optionally implement _Batch.Callback_
+to be notified of the results from each region invocation as they complete. The instance’s
+`void update(byte[] region, byte[] row, R result)` method will be called with the value returned by `R call(T instance)`
+from each region.
+
+##### Implementing Endpoints
+
+Two steps are required to implement an _Endpoint_:
+
+    1. Define the Protobuf service and generate classes (using the protobuf compiler `protoc`)
+    2. Extend the generated, custom Service subclass. All the declared RPC methods need to be implemented with the user code.
+       This is done by extending the generated class, plus merging in the Coprocessor and CoprocessorService interfaces. 
+
+So if in your protobuffer file you have defined something like this (Step 1):
+
+```protobuf
+option java_package = "coprocessor.generated";
+option java_outer_classname = "RowCounterProtos";
+option java_generic_services = true;
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
+message CountRequest {
+}
+message CountResponse {
+  required int64 count = 1 [default = 0];
+}
+service RowCountService {
+  rpc getRowCount(CountRequest)
+      returns (CountResponse);
+  rpc getCellCount(CountRequest)
+      returns (CountResponse);
+}
+```
+
+Your code implementing the above should look like this:
+
+```
+public class RowCountEndpoint extends RowCounterProtos.RowCountService implements Coprocessor, CoprocessorService {
+    @Override
+    public void getRowCount(
+        RpcController controller,
+        RowCounterProtos.CountRequest request, 
+        RpcCallback<RowCounterProtos.CountResponse> done) {
+        
+        RowCounterProtos.CountResponse response = null;
+        //TODO implement logic to get count as a long
+        done.run(RowCounterProtos.CountResponse.newBuilder().setCount(count).build());
+    }
+    
+    @Override
+    public void getCellCount(
+        RpcController controller,
+        RowCounterProtos.CountRequest request,
+        RpcCallback<RowCounterProtos.CountResponse> done) {
+        RowCounterProtos.CountResponse response = null;
+        //TODO implement logic to get count as a long
+        done.run(RowCounterProtos.CountResponse.newBuilder().setCount(count).build());
+    }
+}
+```
+
+After your implementation is complete, you need to add the following to your _hbase-site.xml_ file:
+
+```xml
+
+<property>
+    <name>hbase.coprocessor.user.region.classes</name>
+    <value>coprocessor.RowCountEndpoint</value>
+</property>
+```
+
+To make use of the above functionality, you need to use the  _Table_ interface:
+
+```
+Table table = connection.getTable(tableName);
+try {
+  final RowCounterProtos.CountRequest request = RowCounterProtos.CountRequest.getDefaultInstance();
+  Map<byte[], Long> results = table.coprocessorService(RowCounterProtos.RowCountService.class, null /*start*/, null /*end*/,
+    new Batch.Call<RowCounterProtos.RowCountService, Long>() {
+        public Long call(RowCounterProtos.RowCountService counter) throws IOException {
+            BlockingRpcCallback<RowCounterProtos.CountResponse> rpcCallback =
+                new BlockingRpcCallback<RowCounterProtos.CountResponse>();
+            counter.getRowCount(null, request, rpcCallback); 
+            RowCounterProtos.CountResponse response = rpcCallback.get();
+            return response.hasCount() ? response.getCount() : 0;
+          }
+    });
+    // TODO handle the response
+} catch (Throwable throwable) {
+  throwable.printStackTrace();
+}
+```
+
+Using batch calls instead:
+
+```
+final CountRequest request = CountRequest.getDefaultInstance(); 
+Map<byte[], CountResponse> results = table.batchCoprocessorService(
+    RowCountService.getDescriptor().findMethodByName("getRowCount"),
+    request, 
+    HConstants.EMPTY_START_ROW, 
+    HConstants.EMPTY_END_ROW,
+    CountResponse.getDefaultInstance());
+```
+
+Use the later form when you have many regions per server, and the returned data is very small, then the cost of the RPC
+roundtrips are noticeable. To use the _CoprocessorRpcChannel_ call:
+
+```
+CoprocessorRpcChannel channel = table.coprocessorService(Bytes.toBytes("row1"));
+RowCountService.BlockingInterface service = RowCountService.newBlockingStub(channel);
+CountRequest request = CountRequest.newBuilder().build();
+CountResponse response = service.getCellCount(null, request);
+```
+
+With the proxy reference, you can invoke any remote function defined in your derived _Service_ implementation from within
+client code, and it returns the result for the region that served the request.
+
+#### Observers
