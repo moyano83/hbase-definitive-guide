@@ -2140,3 +2140,263 @@ With the proxy reference, you can invoke any remote function defined in your der
 client code, and it returns the result for the region that served the request.
 
 #### Observers
+
+Observers are like triggers in RDBMS, they differ to endpoints in that they are not only running in the context of a region.
+They can run in different parts of the system and react to events triggered by clients, but also implicitly by servers.
+Observers use pre-defined hooks into the server processes, so you can't add your own ones. They also act on the server side
+only, with no connection to the client. What you can do though is combine an endpoint with an observer for region-related
+functionality, exposing observer state through a custom RPC API.
+
+##### The ObserverContext Class
+
+For the callbacks provided by the _Observer_ classes, there is a special context handed in as the first parameter to all
+calls: an instance of the _ObserverContext_ class. It provides access to the current environment, and the ability to indicate
+to the coprocessor framework what it should do after a callback is completed. Methods provided by the context class:
+
+    * E getEnvironment(): Returns the reference to the current coprocessor environment 
+    * void prepare(E env): Prepares the context with the specified environment 
+    * void bypass(): When your code invokes this method, the framework returns your value instead of the calling method value
+    * void complete(): To indicate that any further processing and coprocessors in the execution chain, can be skipped
+    * boolean shouldBypass(): Used internally by the framework to check on the bypass flag 
+    * boolean shouldComplete(): Used internally by the framework to check on the complete flag
+    * static <T extends CoprocessorEnvironment> ObserverContext<T> createAndPrepare(T env, ObserverContext<T> ctx): Static 
+      function to initialize a context, it will create a new instance when the provided context is null
+
+The `complete()` call influences the execution chain of the coprocessors, while the `bypass()` call stops any further default
+processing on the server within the current observer.
+
+##### The RegionObserver Class
+
+Operations in this class can be divided into two groups: region life-cycle changes and client API calls, there is a generic
+callback for many operations of both kinds:
+
+```
+enum Operation {
+ANY, GET, PUT, DELETE, SCAN, APPEND, INCREMENT, SPLIT_REGION, MERGE_REGION, BATCH_MUTATE, REPLAY_BATCH_MUTATE, COMPACT_REGION
+}
+
+postStartRegionOperation(ObserverContext<RegionCoprocessorEnvironment> ctx, Operation operation)
+postCloseRegionOperation(ObserverContext<RegionCoprocessorEnvironment> ctx, Operation operation)
+```
+
+These methods in a RegionObserver are invoked when any of the possible Operations listed is called.
+
+###### Handling Region Life-Cycle Events
+
+The Lifecycle state changes of a region is as follows `unassigned --> pending open --> open --> pending close --> closed`
+and coprocessors can hook in the pending open, open and pending close state.
+
+*State: pending open*
+
+A region is in this state when it is about to be opened. The following callbacks in order of their invocation are available:
+
+```
+postLogReplay(...) // triggered dependent on what WAL recovery mode is configured: distributed log splitting or log replay
+preOpen(...) // just before the region is opened
+preStoreFileReaderOpen(...) //before the store files are opened in due course
+postStoreFileReaderOpen(...) // after the store files are opened in due course
+preWALRestore(...) / postWALRestore(...) // the WAL being replayed
+postOpen(...) // just after the region was opened
+```
+
+*State: open*
+A region is considered open when it is deployed to a region server and fully operational. The possible hooks are:
+
+```
+preFlushScannerOpen(...)
+preFlush(...) / postFlush(...)
+preCompactSelection(...) / postCompactSelection(...)
+preCompactScannerOpen(...)
+preCompact(...) / postCompact(...)
+preSplit(...)
+preSplitBeforePONR(...)
+preSplitAfterPONR(...)
+postSplit(...)
+postCompleteSplit(...) / preRollBackSplit(...) / postRollBackSplit(...)
+```
+
+Obviously, the pre calls are executed before, while the post calls are executed after the respective operation. The hooks for
+flush, compact, and split are directly linked to the matching region housekeeping functions.
+
+*State: pending close*
+
+Occurs when the region transitions from open to closed. Just before and after the region is closed these hooks are executed:
+
+```
+preClose(...,  boolean abortRequested)
+postClose(..., boolean abortRequested)
+```
+
+###### Handling Client API Events
+
+All client API calls are explicitly sent from a client application to the region server and there are hooks for these
+operations too. For example, the `Table.put()` operation has a `prePut(...)` and a `postPut(...)` hooks which has their order
+of execution, check the documentation for more details. Example of usage:
+
+```
+public class ObserverStatisticsCustom  implements RegionObserver{
+    @Override
+    public void preOpen(ObserverContext<RegionCoprocessorEnvironment> observerContext) throws IOException {
+        someMethod();
+    }
+    @Override
+    public void postOpen(ObserverContext<RegionCoprocessorEnvironment> observerContext) {
+      someOtherMethod();
+    }
+}
+```
+
+###### The RegionCoprocessorEnvironment Class
+
+The environment instances provided to a coprocessor that is implementing the _RegionObserver_ interface are based on the
+_RegionCoprocessorEnvironment_ class, which in turn is implementing the _CoprocessorEnvironment_ interface. Specific methods
+provided by the _RegionCoprocessorEnvironment_ class:
+
+    * getRegion(): Returns a reference to the region the current observer is associated with
+    * getRegionInfo(): Get information about the region associated with the current coprocessor instance
+    * getRegionServerServices(): Provides access to the shared RegionServerServices instance
+    * getSharedData(): All the shared data between the instances of this coprocessor
+
+The `getRegionInfo()` method returns a _HRegionInfo_ instance, which has some very useful methods:
+
+```
+byte[] getStartKey()
+byte[] getEndKey()
+byte[] getRegionName()
+boolean isSystemTable()
+int getReplicaId()
+```
+
+The `RegionServerServices()` call returns a _RegionServerServices_ class, which also has a lot of methods (check javadocs).
+
+###### The BaseRegionObserver Class
+
+This class can be used as the basis for all your observer-type coprocessors. It has placeholders for all methods required by
+the _RegionObserver_ interface. They are all left blank, so by default nothing is done when extending this class.
+
+##### The MasterObserver Class
+
+This subclass of Coprocessor handles all possible callbacks the master server may initiate. The MasterObserver class provides
+hooks on DDL alike operations such as `pre(post)CreateTable`, `pre(post)AddColumn` and more. Check the java docs for more
+details. The methods are grouped roughly into table and region, namespace, snapshot, and server related calls.
+
+###### The MasterCoprocessorEnvironment Class
+
+The MasterCoprocessorEnviron meant is wrapping MasterObserver instances. It also implements the CoprocessorEnvironment
+interface, giving you access to the `getTable()` call. Specific method provided by the _MasterCoprocessorEnvironment_ class:
+
+    * getMasterServices(): Provides access to the shared MasterServices instance
+
+The above method provides access the shared master services instance, which exposes many functions of the Master admin API
+such as table CRUD operations, namespace related methods. Check the java docs for more details.
+
+###### The BaseMasterObserver Class
+
+Either you can implement a MasterObserver on the interface directly, or you can extend the BaseMasterObserver class instead,
+which implements the interface while leaving all callback functions empty. You need to add the following to the
+_hbase-site.xml_ file for the coprocessor to be loaded by the master process (a restart is required):
+
+```xml
+
+<property>
+    <name>hbase.coprocessor.master.classes</name>
+    <value>coprocessor.MasterObserverExample</value>
+</property>
+```
+
+The environment is wrapped in an _ObserverContext_, you have the same extra flow controls, exposed by the `bypass()` and
+`complete()` methods. You can use them to explicitly disable certain operations or skip subsequent coprocessor execution.
+
+###### The BaseMasterAndRegionObserver Class
+
+The _BaseMasterAndRegionObserver_ class is a combination of the _BaseRegionObserver_ and the _MasterObserver_. This class is
+only useful to run on the HBase Master.
+
+##### The RegionServerObserver Class
+
+You can run code within the region servers using the _RegionServerObserver_ class. It exposes hooks spanning many regions and
+tables. Methods of interest:
+
+    * postCreateReplicationEndPoint(...): Invoked after the server has created a replication endpoint
+    * preMerge(...), postMerge(...): Called when two regions are merged.
+    * preMergeCommit(...), postMergeCommit(...): Called after preMerge() and before postMerge().
+    * preRollBackMerge(...), postRollBackMerge(...): Called when a region merge fails and merge transaction is rolled back
+    * preReplicateLogEntries(...), postReplicateLogEntries(...): To allow special treatment of each log entry
+    * preRollWALWriterRequest(...), postRollWALWriterRe quest(...): Wrap the rolling of WAL files
+    * preStopRegionServer(...): Called when the Stoppable method stop() is called
+
+###### The RegionServerCoprocessorEnvironment Class
+
+This class wraps the _RegionServerObserver_ instances. Implements the _CoprocessorEnvironment_ interface. Specific method
+provided by the _RegionServerCoprocessorEnvironment_ class
+
+    * getRegionServerServices(): Provides access to the shared RegionServerServices instance
+
+###### The BaseRegionServerObserver Class
+
+This is an empty implementation of the RegionSer verObserver interface, so you can overwrite the necessary methods only.
+
+##### The WALObserver Class
+
+The write-ahead log or WAL, offers a manageable list of callbacks, namely the following two:
+
+    * preWALWrite(...), postWALWrite(...): Wrap the writing of log entries to the WAL allowing access to the full edit record
+
+Since you receive the entire record in these methods, you can influence what is written to the log.
+
+###### The WALCoprocessorEnvironment Class
+
+There is a specialized environment that is provided as part of the callbacks. Here it is an instance of the
+_WALCoprocessorEnvironment_ class. It also extends the _CoprocessorEnvironment_ interface, giving you access to the
+`getTable()` call to access data from within your own implementation. Specific method provided by the
+_WALCoprocessorEnvironment_ class:
+
+    * getWAL(): Provides access to the shared WAL instance
+
+The methods available from the WAL interface are:
+
+```
+void registerWALActionsListener(final WALActionsListener listener) 
+boolean unregisterWALActionsListener(final WALActionsListener listener)
+byte[][] rollWriter() throws FailedLogCloseException, IOException 
+byte[][] rollWriter(boolean force) throws FailedLogCloseException, IOException
+void shutdown() throws IOException
+void close() throws IOException
+long append(HTableDescriptor htd, 
+    HRegionInfo info, 
+    WALKey key, 
+    WALEdit edits,
+    AtomicLong sequenceId, 
+    boolean inMemstore, 
+    List<Cell> memstoreKVs) throws IOException
+void sync() throws IOException
+void sync(long txid) throws IOException
+boolean startCacheFlush(final byte[] encodedRegionName)
+void completeCacheFlush(final byte[] encodedRegionName)
+void abortCacheFlush(byte[] encodedRegionName)
+WALCoprocessorHost getCoprocessorHost()
+long getEarliestMemstoreSeqNum(byte[] encodedRegionName)
+```
+
+###### The BaseWALObserver Class
+
+The _BaseWALObserver_ class implements the _WALObserver_ interface, use this class to implement your own or the interface
+directly.
+
+##### The BulkLoadObserver Class
+
+Class used during bulk loading operations, as triggered by the HBase supplied _completebulkload_ tool, contained in the
+server JAR file. During that operation the available callbacks are triggered:
+
+    * prePrepareBulkLoad(...): Invoked before the bulk load operation takes place
+    * preCleanupBulkLoad(...): Called when the bulk load is complete and clean up tasks are performed
+
+##### The EndPointObserver Class
+
+This observer shares the _RegionCoprocessorEnvironment_, because endpoints runs in a region context. Callback methods are:
+
+    * preEndpointInvocation(...), postEndpointInvocation(...): callbacks to wraps the server side execution whenever an 
+      endpoint method is called from a client
+
+The client can replace the given _Message_ instance to modify the outcome of the endpoint method. The server-side call is
+aborted completely in case of failure.
