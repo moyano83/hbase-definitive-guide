@@ -6,6 +6,7 @@
 2. [Chapter 1: Installation](#Chapter2)
 3. [Chapter 3: Client API: The Basics](#Chapter3)
 4. [Chapter 4: Client API: Advanced Features](#Chapter4)
+5. [Chapter 5: Client API: Administrative Features](#Chapter5)
 
 ## Chapter 1: Introduction<a name="Chapter1"></a>
 
@@ -2400,3 +2401,418 @@ This observer shares the _RegionCoprocessorEnvironment_, because endpoints runs 
 
 The client can replace the given _Message_ instance to modify the outcome of the endpoint method. The server-side call is
 aborted completely in case of failure.
+
+## Chapter 5: Client API: Administrative Features<a name="Chapter5"></a>
+
+### Schema Definition
+
+HBase exposes a data definition-like API, creating a table in HBase implicitly involves the definition of a table schema, as
+well as the schemas for all contained column families.
+
+#### Namespaces
+
+Namespaces solves the problem of organizing many tables, and also allows defining abstract generic concepts like security.
+HBase creates two namespaces when it starts: default and hbase (for system generic tables). Use `list_namespace` on the HBase
+shell to see the namespaces, and `list_namespace_tables 'namespace_name'` to see the tables in the _namespace\_name_
+namespace. To create a namespace programatically, you need to make use of the _NamespaceDescriptor_ class, constructors are:
+
+```
+static Builder create(String name) // pass the namespace name
+static Builder create(NamespaceDescriptor ns) // Clones it from another instance of NamespaceDescriptor
+```
+
+and significant methods:
+
+```
+String getName()
+String getConfigurationValue(String key)
+Map<String, String> getConfiguration()
+void setConfiguration(String key, String value)
+void removeConfiguration(final String key)
+String toString()
+```
+
+#### Tables
+
+Everything stored in HBase is ultimately grouped into one or more tables. The typical things you will want to define for a
+table are column families. Constructor of the descriptor in Java:
+
+```
+HTableDescriptor(final TableName name)
+HTableDescriptor(HTableDescriptor desc)
+```
+
+A table can't be renamed, usually you create a new table with the desired name and copy the data over using the API. The name
+is used as part of the path to the actual storage files and needs to complain with filename rules (you can check the validity
+of the name with the static helper methods, for example `isLegalTableQualifierName()`). Conceptually a table is a collection
+of rows with columns in HBase, but physically they are stored in separate partitions called regions (served by exactly one
+region server).
+
+##### Serialization
+
+Every communication over the network is done using the Google's protobuf serialization over an RPC call. The framework
+calls `toByteArray()` on the sending side, serializing the object’s fields, while the framework is taking care of noting the
+class name and other details on their behalf. Alternatively the `convert()` method in case of the _HTableDescriptor_
+class can be used to convert the entire instance into a _Protobuf_ class. On the receiving server the framework reads the
+metadata, and will create an instance using the static `parseFrom()` of the matching class. The same is achieved using the
+matching `convert()` call, which will take a Protobuf object instead of a low-level byte array. The methods are:
+
+```
+byte[] toByteArray()
+static HTableDescriptor parseFrom(final byte[] bytes)
+TableSchema convert()
+static HTableDescriptor convert(final TableSchema ts)
+```
+
+These protocol text files are compiled and versioned, thus can evolve over time.
+
+##### The RegionLocator Class
+
+A _Table_ is divided in _Region_ which are consecutive, sorted sets of rows. There are times when you need to know what
+regions a table has, what their boundaries are, and which specific region is serving a given row key. For that, there are a
+few methods provided by the _RegionLocator_ class, which you can retrieve from a _Connection_ to HBase like in
+`RegionLocator locator = connection.getRegionLocator(TableName.valueOf("someTableName"))`. Important methods:
+
+```
+public HRegionLocation getRegionLocation(final byte[] row) throws IOException 
+public HRegionLocation getRegionLocation(final byte[] row, boolean reload) throws IOException 
+public List<HRegionLocation> getAllRegionLocations() throws IOException 
+public byte[][] getStartKeys() throws IOException 
+public byte[][] getEndKeys() throws IOException 
+public Pair<byte[][], byte[][]> getStartEndKeys() throws IOException
+TableName getName() 
+```
+
+The _HRegionLocation_ is giving you access to region details, such as the server currently hosting it, or the associated
+_HRegionInfo_ object.
+
+##### Server and Region Names
+
+The region name is a combination of table and region details (the start key, and region creation time), and an optional MD5
+hash of the leading prefix of the name, surrounded by dots:
+`<table name>,<region start key>,<region creation time>[.<md5hash(prefix)>.]`
+The server name is also a combination of various parts, including the host name of the machine
+`<host name>,<RPC port>,<server start time>`. The class _ServerName_ wraps the details into a convenient structure.
+
+#### Table Properties
+
+The table descriptor offers getters and setters to set many options of the table. Those are shown grouped below
+
+##### Name
+
+Methods are `TableName getTableName()` and `String getNameAsString()`.
+
+##### Column Families
+
+Important methods:
+
+```
+HTableDescriptor addFamily(final HColumnDescriptor family)
+HTableDescriptor modifyFamily(final HColumnDescriptor family)
+HColumnDescriptor removeFamily(final byte[] column)
+HColumnDescriptor getFamily(final byte[] column)
+boolean hasFamily(final byte[] familyName)
+Set<byte[]> getFamiliesKeys()
+HColumnDescriptor[] getColumnFamilies()
+Collection<HColumnDescriptor> getFamilies()
+```
+
+##### Maximum File Size
+
+To specify the maximum size a region within the table should grow to. Methods are `long getMaxFileSize()` and
+`HTableDescriptor setMaxFileSize(long maxFileSize)`. If one single column family exceeds this number, the region is split.
+
+##### Memstore Flush Size
+
+This parameter controls the size to store to buffer before writing the values to disk. The methods are
+`long getMemStoreFlushSize()` and `HTableDescriptor setMemStoreFlushSize(long memstoreFlushSize)`.
+
+##### Compactions
+
+To define if underlying files should be compacted: `boolean isCompactionEnabled()` and
+`HTableDescriptor setCompactionEnabled(final boolean isEnable)`.
+
+##### Split Policy
+
+To define a split policy use `HTableDescriptor setRegionSplitPolicyClassName(String clazz)` and
+`String getRegionSplitPolicyClassName()`.
+
+##### Region Replicas
+
+Value for the number of region replicas you want to have for the current table: `int getRegionReplication()` and
+`HTableDescriptor setRegionReplication(int regionReplication)`.
+
+##### Durability
+
+Controls at table level how data is persisted in term of durability guarantees:
+`HTableDescriptor setDurability(Durability durability)` and `Durability getDurability()`
+
+##### Read-only
+
+Tables are writable by default, but can be changed through `boolean isReadOnly()` and
+`HTableDescriptor setReadOnly(final boolean readOnly)`.
+
+##### Coprocessors
+
+Methods to add, check, list, and re‐ move coprocessors from the current table descriptor instance:
+
+```
+HTableDescriptor addCoprocessor(String className) throws IOException
+HTableDescriptor addCoprocessor(String className, 
+                                Path jarFilePath, 
+                                int priority, 
+                                final Map<String, String> kvs) throws IOException
+boolean hasCoprocessor(String className)
+List<String> getCoprocessors()
+void removeCoprocessor(String className)
+```
+
+##### Descriptor Parameters
+
+Other methods that let you set arbitrary key/value pairs:
+
+```
+byte[] getValue(byte[] key)
+String getValue(String key)
+Map<ImmutableBytesWritable,ImmutableBytesWritable> getValues()
+HTableDescriptor setValue(byte[] key, byte[] value)
+HTableDescriptor setValue(final ImmutableBytesWritable key, final ImmutableBytesWritable value)
+HTableDescriptor setValue(String key, String value)
+void remove(final String key)
+void remove(ImmutableBytesWritable key)
+void remove(final byte[] key)
+```
+
+A use-case for the above might be to store application related metadata in this list.
+
+##### Configuration
+
+Allows you to override any HBase configuration property on a per table basis (merged at runtime with the default values, and
+the cluster wide configurations):
+
+```
+String getConfigurationValue(String key)
+Map<String, String> getConfiguration()
+HTableDescriptor setConfiguration(String key, String value)
+void removeConfiguration(final String key)
+```
+
+##### Miscellaneous Calls
+
+There are other calls to check the nature of the region or table or to convert the state of the instance into a string...
+
+```
+boolean isRootRegion()
+boolean isMetaRegion()
+boolean isMetaTable()
+String toString()
+String toStringCustomizedValues()
+String toStringTableAttributes()
+```
+
+#### Column Families
+
+There is a class called _HColumnDescriptor_ that wraps each column family’s settings into a dedicated Java class. Column
+families define shared features that apply to all columns that are created within them. Columns are addressed as a
+combination of the column family name and the column qualifier `family:qualifier`. The family name is added to the path and
+must comply with filename standards. You can omit the qualifier and specify just the column family name and HBase would
+create a column with the special empty qualifier. The Java class has many constructors available:
+
+```
+HColumnDescriptor(final String familyName)
+HColumnDescriptor(final byte[] familyName)
+HColumnDescriptor(HColumnDescriptor desc)
+```
+
+Different properties of the column family can be set, for example:
+
+##### Name
+
+You can use `byte[] getName()` or `String getNameAsString()` to retrieve it from an existing HColumnDescriptor instance.
+
+##### Maximum Versions
+
+To specify how many versions of each value you want to keep use `int getMaxVersions()` or
+`HColumnDescriptor setMaxVersions(int maxVersions)`.
+
+##### Minimum Versions
+
+Specifies how many versions should always be kept for a column. Use `int getMinVersions()` or
+`HColumnDescriptor setMinVersions(int minVersions)`.
+
+##### Keep Deleted Cells
+
+Controls whether the background housekeeping processes should remove deleted cells, or not. Use:
+
+```
+KeepDeletedCells getKeepDeletedCells()
+HColumnDescriptor setKeepDeletedCells(boolean keepDeletedCells)
+HColumnDescriptor setKeepDeletedCells(KeepDeletedCells keepDeletedCells)
+```
+
+The above _KeepDeletedCells_ is an enumeration with values:
+
+    * FALSE: Deleted cells are not retained
+    * TRUE: Deleted cells are retained until removed by other means such as time-to-live (TTL) or max number of versions
+    * TTL: Deleted cells are retained until the delete marker expires due to TTL
+
+##### Compression
+
+HBase has pluggable compression algorithm support (defaults to NONE). The possible values are:
+
+    * NONE: Disables compression (default)
+    * GZ: Uses the Java-supplied or native GZip compression (needs to be installed separately)
+    * LZO: Enables LZO compression; must be installed separately
+    * LZ4: Enables LZ4 compression; must be installed separately
+    * SNAPPY: Enables Snappy compression; binaries must be installed separately
+
+you can use these methods to change the value:
+
+```
+Compression.Algorithm getCompression()
+Compression.Algorithm getCompressionType()
+HColumnDescriptor setCompressionType(Compression.Algorithm type)
+Compression.Algorithm getCompactionCompression() Compression.Algorithm getCompactionCompressionType() 
+HColumnDescriptor setCompactionCompressionType(Compression.Algorithm type)
+```
+
+Note there are two sets of methods, for the general compression setting and for the compaction compression setting.
+
+##### Encoding
+
+Sets the encoding used for data blocks. If enabled, you can further influence whether the same is applied to the cell tags:
+
+```
+DataBlockEncoding getDataBlockEncoding()
+HColumnDescriptor setDataBlockEncoding(DataBlockEncoding type)
+```
+
+Options of the _DataBlockEncoding_ enumeration:
+
+    * NONE: No prefix encoding takes place (default)
+    * PREFIX: Represents the prefix compression algorithm, which removes repeating common prefixes from subsequent cell keys
+    * DIFF: Diff algorithm, which further compresses the key of subsequent cells by storing only differences to previous keys
+    * FAST_DIFF: An optimized version of the diff encoding, which also omits repetitive cell value data
+    * PREFIX_TREE: Trades increased write time latencies for faster read performance. Uses a tree structure to compress the 
+      cell key
+
+Cells also may carry an arbitrary list of tags, used for different purposes which you can compress using the following
+methods `HColumnDescriptor setCompressTags(boolean compressTags)` and `boolean isCompressTags()` (defaults to true).
+
+##### Block Size
+
+All stored files in HBase are divided into smaller blocks (default to 64 KB) that are loaded during a `get()` or `scan()`
+operation, analogous to pages in RDBMSes: `synchronized int getBlocksize()` and `HColumnDescriptor setBlocksize(int s)`.
+
+##### Block Cache
+
+To set if HBase should cache the blocks described above (defaults to true), use `boolean isBlockCacheEnabled()` and
+`HColumnDescriptor setBlockCacheEnabled(boolean blockCacheEnabled)`. There are other options you can use to influence how the
+block cache is used:
+
+```
+boolean isCacheDataOnWrite()
+HColumnDescriptor setCacheDataOnWrite(boolean value)
+
+boolean isCacheDataInL1()
+HColumnDescriptor setCacheDataInL1(boolean value)
+
+boolean isCacheIndexesOnWrite()
+HColumnDescriptor setCacheIndexesOnWrite(boolean value)
+
+boolean isCacheBloomsOnWrite()
+HColumnDescriptor setCacheBloomsOnWrite(boolean value)
+
+boolean isEvictBlocksOnClose()
+HColumnDescriptor setEvictBlocksOnClose(boolean value)
+
+boolean isPrefetchBlocksOnOpen()
+HColumnDescriptor setPrefetchBlocksOnOpen(boolean value)
+```
+
+##### Time-to-Live
+
+HBase supports predicate deletions on the number of versions kept for each value, but also on specific times. Use
+`int getTimeToLive()` and `HColumnDescriptor setTimeToLive(int timeToLive)`. The value is specified in seconds and is, by
+default, set to _HConstants.FOREVER_.
+
+##### In-Memory
+
+The in-memory flag defaults to false but can be read and modified with `boolean isInMemory()` and
+`HColumnDescriptor setInMemory(boolean inMemory)`. Think of it as a promise, or elevated priority, to keep them in memory as
+soon as they are loaded during a normal retrieval operation, and until discarded when the pressure on the heap is too high.
+
+##### Bloom Filter
+
+Bloom filters allows you to improve lookup times given you have a specific access pattern. Supported _BloomTypes_ filters:
+
+    * NONE: Disables the filter
+    * ROW: Use the row key for the filter (default)
+    * ROWCOL: Use the row key and column key (family+qualifier) for the filter
+
+The Bloom filter can be changed and retrieved with  `BloomType getBloomFilterType()` and
+`HColumnDescriptor setBloomFilterType(final BloomType bt)`.
+
+##### Replication Scope
+
+Replication enables you to have multiple clusters that ship local updates across the network, so they are applied to each
+other. Change the scope with `int getScope()` and `HColumnDescriptor setScope(int scope)`. Possible values are:
+
+    * HConstants.REPLICATION_SCOPE_LOCAL: Corresponding to value 0. Default, only local scope
+    * HConstants.REPLICATION_SCOPE_GLOBAL: Corresponding to value 1. Global scope, replicate family to a remove cluster
+
+##### Encryption
+
+Sets encryption related details. Available methods are `String getEncryptionType()` and
+`HColumnDescriptor setEncryptionType(String algorithm)`, or with the counterpart byte arguments `byte[] getEncryptionKey()`
+and `HColumnDescriptor setEncryptionKey(byte[] keyBytes)`.
+
+##### Descriptor Parameters
+
+Methods that let you set arbitrary key/value pairs (Stored with the column definition and can be retrieved if necessary):
+
+```
+byte[] getValue(byte[] key)
+String getValue(String key)
+Map<ImmutableBytesWritable, ImmutableBytesWritable> getValues()
+HColumnDescriptor setValue(byte[] key, byte[] value)
+HColumnDescriptor setValue(String key, String value)
+void remove(final byte[] key)
+```
+
+##### Configuration
+
+Allows you to override any HBase configuration property on a per column family basis (merged at runtime with the default
+values and the cluster wide configuration file):
+
+```
+String getConfigurationValue(String key)
+Map<String, String> getConfiguration()
+HColumnDescriptor setConfiguration(String key, String value)
+void removeConfiguration(final String key)
+```
+
+##### Miscellaneous Calls
+
+, and get hold of the list of all default values. They further allow you to convert the entire, or partial state of the
+instance into a string for further use, for example, to print the result into a log file:
+
+```
+static Unit getUnit(String key) // Allows you to retrieve the unit for a configuration parameter
+static Map<String, String> getDefaultValues() // get hold of the list of all default values
+String toString() // allow you to convert the entire, or partial state of the instance into a string for further use
+String toStringCustomizedValues()
+```
+
+Example of usage is `new HColumnDescriptor("colf1").setValue("key1", "value1").setBloomFilterType(BloomType.ROWCOL);` where
+"key1" with value "value1" would appear as metadata if the above column descriptor is printed. The serialization functions
+required to send the configured instances over RPC are also present for the column descriptor:
+
+```
+byte[] toByteArray()
+static HColumnDescriptor parseFrom(final byte[] bytes) throws DeserializationException
+static HColumnDescriptor convert(final ColumnFamilySchema cfs) 
+ColumnFamilySchema convert()
+```
+
+### HBaseAdmin
