@@ -7,31 +7,31 @@
 3. [Chapter 3: Client API: The Basics](#Chapter3)
 4. [Chapter 4: Client API: Advanced Features](#Chapter4)
 5. [Chapter 5: Client API: Administrative Features](#Chapter5)
+6. [Chapter 6: Available Clients](#Chapter6)
 
 ## Chapter 1: Introduction<a name="Chapter1"></a>
 
 ### The Dawn of Big Data
 
-HBase stores data on disk in a column-oriented format, it is distinctly different from traditional columnar databases in that
-whereas columnar databases excel at providing real-time analytical access to data, HBase excels at providing key-based access
-to a specific cell of data, or a sequential range of cells.
+HBase stores data on disk in a column-oriented format, it is distinctly different from traditional columnar databases in that whereas columnar
+databases excel at providing real-time analytical access to data, HBase excels at providing key-based access to a specific cell of data, or a
+sequential range of cells.
 
 ### The Problem with Relational Database Systems
 
-With increasing loads there are several techniques that can be used to cope with the load such as adding slaves, adding a
-cache for most used queries, scaling servers vertically, denormalize the data for common queries or even prematerialize those
-queries (compute them in advance), drop secondary indexes... At the end you have reduced the RDBMS database to just storing
-your data in a way that is optimized for your access patterns.
+With increasing loads there are several techniques that can be used to cope with the load such as adding slaves, adding a cache for most used queries,
+scaling servers vertically, denormalize the data for common queries or even prematerialize those queries (compute them in advance), drop secondary
+indexes... At the end you have reduced the RDBMS database to just storing your data in a way that is optimized for your access patterns.
 
 ### Nonrelational Database Systems, Not-Only SQL or NoSQL?
 
-A lot of the new kinds of data storage systems do one thing first: throw out the limiting factors in truly scalable systems.
-For example, they often have no support for transactions or secondary indexes.
+A lot of the new kinds of data storage systems do one thing first: throw out the limiting factors in truly scalable systems. For example, they often
+have no support for transactions or secondary indexes.
 
 #### Consistency Models
 
-Consistency is about guaranteeing that a database always appears truthful to its clients, thus every operation on the
-database must carry its state from one consistent state to the next. Consistency can be classified depending on:
+Consistency is about guaranteeing that a database always appears truthful to its clients, thus every operation on the database must carry its state
+from one consistent state to the next. Consistency can be classified depending on:
 
     *Strict: The changes to the data are atomic and appear to take effect instantaneously. This is the highest form of 
       consistency.
@@ -43,8 +43,7 @@ database must carry its state from one consistent state to the next. Consistency
 
 #### Dimensions
 
-Within the NoSQL category, there are numerous dimensions you could use to classify where the strong points of a particular
-system lie:
+Within the NoSQL category, there are numerous dimensions you could use to classify where the strong points of a particular system lie:
 
     * Data model: key/value stores, semistructured, column-oriented stores, and document-oriented stores
     * Storage model: In-memory, persistent
@@ -69,77 +68,68 @@ system lie:
 
 #### Scalability
 
-RDBMS are well suited for transactional processing, but not for very large-scale analytical processing (very large queries
-that scan wide ranges of records or entire tables).
+RDBMS are well suited for transactional processing, but not for very large-scale analytical processing (very large queries that scan wide ranges of
+records or entire tables).
 
 #### Database (De-)Normalization
 
-The support for sparse, wide tables and column-oriented design often eliminates the need to normalize data and, in the
-process, the costly JOIN operations needed to aggregate the data at query time. Use of intelligent keys gives you
-fine-grained control over how—and where—data is stored.
+The support for sparse, wide tables and column-oriented design often eliminates the need to normalize data and, in the process, the costly JOIN
+operations needed to aggregate the data at query time. Use of intelligent keys gives you fine-grained control over how—and where—data is stored.
 
 ### Building Blocks
 
 #### Backdrop
 
-HBase is based on BigTable, which is a distributed storage system for managing structured data that is designed to scale to a
-very large size: petabytes of data across thousands of commodity servers. It is a sparse, distributed, persistent
-multi-dimensional sorted map.
+HBase is based on BigTable, which is a distributed storage system for managing structured data that is designed to scale to a very large size:
+petabytes of data across thousands of commodity servers. It is a sparse, distributed, persistent multi-dimensional sorted map.
 
 #### Tables, Rows, Columns, and Cells
 
-The most basic unit is a column. One or more columns form a row that is addressed uniquely by a row key and a number of rows,
-in turn, form a table. Rows are composed of columns, and those, in turn, are grouped into column families. Each column may
-have multiple versions, with each distinct value contained in a separate cell. All columns in a column family are stored
-together in the same low-level storage file, called an HFile. All rows are always sorted lexicographically by their row key (
-In lexicographical sorting, each key is compared on a binary level, byte by byte, from left to right). Column families need
-to be defined when the table is created and the name of the column family must be composed of printable characters. Columns
-are often referenced as _family:qualifier_ with the qualifier being any arbitrary array of bytes. Every column value, or
-cell, either is timestamped implicitly by the system or can be set explicitly by the user. This can be used, to save multiple
-versions of a value as it changes over time, with different versions of a cell are stored in decreasing timestamp order,
-allowing you to read the newest value first. This can be seen as
-`SortedMap<RowKey, List<SortedMap<Column, List<Value, Timestamp>>>>`. Access to row data is atomic and includes any number of
-columns being read or written to. There is no further guarantee or transactional feature that spans multiple rows or across
-tables. The atomic access is also a contributing factor to this architecture being strictly consistent, as each concurrent
-reader and writer can make safe assumptions about the state of a row.
+The most basic unit is a column. One or more columns form a row that is addressed uniquely by a row key and a number of rows, in turn, form a table.
+Rows are composed of columns, and those, in turn, are grouped into column families. Each column may have multiple versions, with each distinct value
+contained in a separate cell. All columns in a column family are stored together in the same low-level storage file, called an HFile. All rows are
+always sorted lexicographically by their row key (
+In lexicographical sorting, each key is compared on a binary level, byte by byte, from left to right). Column families need to be defined when the
+table is created and the name of the column family must be composed of printable characters. Columns are often referenced as _family:qualifier_ with
+the qualifier being any arbitrary array of bytes. Every column value, or cell, either is timestamped implicitly by the system or can be set explicitly
+by the user. This can be used, to save multiple versions of a value as it changes over time, with different versions of a cell are stored in
+decreasing timestamp order, allowing you to read the newest value first. This can be seen as
+`SortedMap<RowKey, List<SortedMap<Column, List<Value, Timestamp>>>>`. Access to row data is atomic and includes any number of columns being read or
+written to. There is no further guarantee or transactional feature that spans multiple rows or across tables. The atomic access is also a contributing
+factor to this architecture being strictly consistent, as each concurrent reader and writer can make safe assumptions about the state of a row.
 
 #### Auto-Sharding
 
-The basic unit of scalability and load balancing in HBase is called a region. Regions are essentially contiguous ranges of
-rows stored together. They are dynamically split by the system when they become too large. Alternatively, they may also be
-merged to reduce their number and required storage files. Initially there is only one region for a table, and as you start
-adding data to it, the system is monitoring it to ensure that you do not exceed a configured maximum size. If you exceed the
-limit, the region is split into two at the middle key. Each region is served by exactly one region server, and each of these
-servers can serve many regions at any time.
+The basic unit of scalability and load balancing in HBase is called a region. Regions are essentially contiguous ranges of rows stored together. They
+are dynamically split by the system when they become too large. Alternatively, they may also be merged to reduce their number and required storage
+files. Initially there is only one region for a table, and as you start adding data to it, the system is monitoring it to ensure that you do not
+exceed a configured maximum size. If you exceed the limit, the region is split into two at the middle key. Each region is served by exactly one region
+server, and each of these servers can serve many regions at any time.
 
 #### Storage API
 
-The API offers operations to create and delete tables and column families. In addition, it has functions to change the table
-and column family metadata, such as compression or block sizes. A scan API allows you to efficiently iterate over ranges of
-rows and be able to limit which columns are returned or the number of versions of each cell. The system has support for
-single-row transactions, and with this support it implements atomic read-modify-write sequences on data stored under a single
-row key. Cell values can be interpreted as counters and updated atomically. There is also the option to run client-supplied
-code in the address space of the server. The server-side framework to support this is called coprocessors.
+The API offers operations to create and delete tables and column families. In addition, it has functions to change the table and column family
+metadata, such as compression or block sizes. A scan API allows you to efficiently iterate over ranges of rows and be able to limit which columns are
+returned or the number of versions of each cell. The system has support for single-row transactions, and with this support it implements atomic
+read-modify-write sequences on data stored under a single row key. Cell values can be interpreted as counters and updated atomically. There is also
+the option to run client-supplied code in the address space of the server. The server-side framework to support this is called coprocessors.
 
 #### Implementation
 
-The data is stored in store files, called HFiles, which are persistent and ordered immutable maps from keys to values.
-Internally, the files are sequences of blocks with a block index stored at the end. The index is loaded when the HFile is
-opened and kept in memory (defaults 64 KB). Since every HFile has a block index, lookups can be performed with a single disk
-seek. When data is updated it is first written to a commit log, called a write-ahead log (WAL) in HBase, and then stored in
-the in-memory memstore. Once the data in memory has exceeded a given maximum value, it is flushed as an HFile to disk. After
-the flush, the commit logs can be discarded up to the last unflushed modification. Because store files are immutable, you
-delete values by adding a delete marker (also known as a tombstone marker) to indicate the fact that the given key has been
-deleted. Reading data back involves a merge of what is stored in the memstores, that is, the data that has not been written
-to disk, and the on-disk store files. HBase has a housekeeping mechanism that merges the files into larger ones using
-compaction. There are two types of compaction: minor compactions and major compactions. The former reduce the number of
-storage files by rewriting smaller files into fewer but larger ones, performing an n-way merge. Since all the data is already
-sorted in each HFile, that merge is fast and bound only by disk I/O performance. The major compactions rewrite all files
-within a column family for a region into a single new one. They also have another distinct feature compared to the minor
-compactions: based on the fact that they scan all key/value pairs, they can drop deleted entries including their deletion
-marker. There are three major components to HBase: the client library, one master server, and many region servers. The region
-servers can be added or removed while the system is up and running to accommodate changing workloads. The master is
-responsible for assigning regions to region servers and uses Apache ZooKeeper.
+The data is stored in store files, called HFiles, which are persistent and ordered immutable maps from keys to values. Internally, the files are
+sequences of blocks with a block index stored at the end. The index is loaded when the HFile is opened and kept in memory (defaults 64 KB). Since
+every HFile has a block index, lookups can be performed with a single disk seek. When data is updated it is first written to a commit log, called a
+write-ahead log (WAL) in HBase, and then stored in the in-memory memstore. Once the data in memory has exceeded a given maximum value, it is flushed
+as an HFile to disk. After the flush, the commit logs can be discarded up to the last unflushed modification. Because store files are immutable, you
+delete values by adding a delete marker (also known as a tombstone marker) to indicate the fact that the given key has been deleted. Reading data back
+involves a merge of what is stored in the memstores, that is, the data that has not been written to disk, and the on-disk store files. HBase has a
+housekeeping mechanism that merges the files into larger ones using compaction. There are two types of compaction: minor compactions and major
+compactions. The former reduce the number of storage files by rewriting smaller files into fewer but larger ones, performing an n-way merge. Since all
+the data is already sorted in each HFile, that merge is fast and bound only by disk I/O performance. The major compactions rewrite all files within a
+column family for a region into a single new one. They also have another distinct feature compared to the minor compactions: based on the fact that
+they scan all key/value pairs, they can drop deleted entries including their deletion marker. There are three major components to HBase: the client
+library, one master server, and many region servers. The region servers can be added or removed while the system is up and running to accommodate
+changing workloads. The master is responsible for assigning regions to region servers and uses Apache ZooKeeper.
 
 ## Chapter 2: Installation<a name="Chapter2"></a>
 
@@ -148,9 +138,8 @@ responsible for assigning regions to region servers and uses Apache ZooKeeper.
 You can download a tar file containing the latest hbase code and run it prior setting the data path specified in the file
 _hbase-site.xml_ and setting the property _hbase.tmp.dir_, once it is changed you can start the service
 `./bin/start-hbase.sh`, the _JAVA\_HOME_  variable must be set. In mac, use `export JAVA_HOME=$(/usr/libexec/java_home)`
-to set this variable. To start an hbase shell, use `./bin/hbase shell` and then you can check the status. To create a test
-table, execute `create 'testtable', 'colfam1'` and use `list` to view the newly created table. Use the following command to
-add data:
+to set this variable. To start an hbase shell, use `./bin/hbase shell` and then you can check the status. To create a test table,
+execute `create 'testtable', 'colfam1'` and use `list` to view the newly created table. Use the following command to add data:
 
 ```hbase
 hbase:003:0> put 'testtable', 'myrow-1', 'colfam1:q1', 'value-1'
@@ -158,10 +147,9 @@ hbase:004:0> put 'testtable', 'myrow-2', 'colfam1:q2', 'value-2'
 hbase:005:0> put 'testtable', 'myrow-2', 'colfam1:q3', 'value-3'
 ```
 
-The result of the above is two rows, _myrow-1_ and _myrow-2_, the first with a column _q1_ the second with two _q2_ and _q3_.
-You can view the results with `scan 'testtable'` or if we just want one cell back, we can use `get 'testtable', 'myrow-1'`.
-Delete a value using delete `'testtable', 'myrow-2', 'colfam1:q2'` and a table using disable plus drop table and then exit
-the shell like this:
+The result of the above is two rows, _myrow-1_ and _myrow-2_, the first with a column _q1_ the second with two _q2_ and _q3_. You can view the results
+with `scan 'testtable'` or if we just want one cell back, we can use `get 'testtable', 'myrow-1'`. Delete a value using
+delete `'testtable', 'myrow-2', 'colfam1:q2'` and a table using disable plus drop table and then exit the shell like this:
 
 ```hbase
 hbase(main):011:0> disable 'testtable'
@@ -173,22 +161,22 @@ hbase(main):012:0> exit
 
 #### Hardware
 
-HBase is written in Java, so at least you need support for a current Java Runtime and a 64-bit operating system to be able to
-address enough memory. In HBase and Hadoop there are two types of machines: masters and slaves. The master does not need that
-much disk but it needs to be a powerfull and have some redundant components is beneficial for failover. HBase use-cases are
-mostly I/O bound, so having more cores will help keep the data drives busy.
+HBase is written in Java, so at least you need support for a current Java Runtime and a 64-bit operating system to be able to address enough memory.
+In HBase and Hadoop there are two types of machines: masters and slaves. The master does not need that much disk but it needs to be a powerfull and
+have some redundant components is beneficial for failover. HBase use-cases are mostly I/O bound, so having more cores will help keep the data drives
+busy.
 
 #### Software
 
-You must set _JAVA\_HOME_ on each node of your cluster, the _conf/hbase-env.sh_ script provides a mechanism to do this. HBase
-depends on Hadoop, it bundles an instance of the Hadoop JAR under its lib directory. It is important that the version of
-Hadoop that is in use on your cluster matches what is used by HBase.
+You must set _JAVA\_HOME_ on each node of your cluster, the _conf/hbase-env.sh_ script provides a mechanism to do this. HBase depends on Hadoop, it
+bundles an instance of the Hadoop JAR under its lib directory. It is important that the version of Hadoop that is in use on your cluster matches what
+is used by HBase.
 
 #### Filesystems for HBase
 
-The FileSystem used by HBase has a pluggable architecture and can be used to replace HDFS with any other supported system.
-HBase has no added means to replicate data or even maintain copies of its own storage files. This functionality must be
-provided by the lower-level system. There are several choices for filesystems:
+The FileSystem used by HBase has a pluggable architecture and can be used to replace HDFS with any other supported system. HBase has no added means to
+replicate data or even maintain copies of its own storage files. This functionality must be provided by the lower-level system. There are several
+choices for filesystems:
 
     * Local: Used by the standalone mode, select it using the scheme `file:///<path>`
     * HDFS: Default when using with a cluster, select it using the scheme `hdfs://<namenode>:<port>/<path>`
@@ -209,24 +197,22 @@ The contents of the binary file that you can download from apache repositories a
 
 ### Run modes
 
-HBase has two run modes: standalone and distributed. To set up HBase in distributed mode, you will need to edit files in the
-HBase conf directory.
+HBase has two run modes: standalone and distributed. To set up HBase in distributed mode, you will need to edit files in the HBase conf directory.
 
 #### Standalone mode
 
-This is the default mode, it does not use HDFS but the local filesystem instead, and it runs all HBase daemons and a local
-ZooKeeper in the same JVM process.
+This is the default mode, it does not use HDFS but the local filesystem instead, and it runs all HBase daemons and a local ZooKeeper in the same JVM
+process.
 
 #### Distributed mode
 
-The distributed mode can be further subdivided into pseudodistributed in where all daemons run on a single node, and fully
-distributed, where the daemons are spread across multiple, physical servers in the cluster. It uses HDFS.
+The distributed mode can be further subdivided into pseudodistributed in where all daemons run on a single node, and fully distributed, where the
+daemons are spread across multiple, physical servers in the cluster. It uses HDFS.
 
 ##### Pseudo-distributed mode
 
-Use this configuration for testing and prototyping on HBase. Do not use this configuration for production or for evaluating
-HBase performance. To use this configuration, edit _conf/hbase-site.xml_ and point HBase at the running Hadoop HDFS instance
-by setting the _hbase.rootdir_ property. i.e.
+Use this configuration for testing and prototyping on HBase. Do not use this configuration for production or for evaluating HBase performance. To use
+this configuration, edit _conf/hbase-site.xml_ and point HBase at the running Hadoop HDFS instance by setting the _hbase.rootdir_ property. i.e.
 
 ```xml
 
@@ -246,9 +232,8 @@ by setting the _hbase.rootdir_ property. i.e.
 
 ##### Fully distributed mode
 
-To use this mode, edit _hbase-site.xml_ and add the _hbase.cluster.distributed_ property and set it to 'true' and then point
-the HBase _hbase.rootdir_ at the appropriate HDFS name node and location in HDFS where you would like HBase to write data.
-i.e.
+To use this mode, edit _hbase-site.xml_ and add the _hbase.cluster.distributed_ property and set it to 'true' and then point the HBase _hbase.rootdir_
+at the appropriate HDFS name node and location in HDFS where you would like HBase to write data. i.e.
 
 ```xml
 
@@ -266,26 +251,24 @@ i.e.
 </configuration>
 ```
 
-A fully distributed mode requires that you modify the _conf/regionservers_ file. It lists all the hosts on which you want to
-run HRegionServer daemons (one host per line, initially contains just a line with 'localhost'). A distributed HBase setup
-also depends on a running ZooKeeper cluster.
+A fully distributed mode requires that you modify the _conf/regionservers_ file. It lists all the hosts on which you want to run HRegionServer
+daemons (one host per line, initially contains just a line with 'localhost'). A distributed HBase setup also depends on a running ZooKeeper cluster.
 
-All participating nodes and clients need to be able to access the running ZooKeeper ensemble. HBase, by default, manages a
-ZooKeeper cluster and it starts and stops the ZooKeeper ensemble as part of the HBase start and stop process. You can also
-manage the ZooKeeper ensemble independent of HBase and just point HBase at the cluster it should use. To toggle HBase
-management of ZooKeeper, use the _HBASE\_MANAGES\_ZK_ variable in conf/hbase-env.sh. This variable, which defaults to true,
-tells HBase whether to start and stop the ZooKeeper ensemble servers as part of the start and stop commands supplied by
-HBase. When HBase manages the ZooKeeper ensemble, you can specify the ZooKeeper configuration options directly in
-_conf/hbase-site.xml_. You can set a ZooKeeper configuration option as a property in the _hbase-site.xml_ configuration file
-by prefixing the ZooKeeper option name with _hbase.zookeeper.property_. You must at least set the ensemble servers with the
+All participating nodes and clients need to be able to access the running ZooKeeper ensemble. HBase, by default, manages a ZooKeeper cluster and it
+starts and stops the ZooKeeper ensemble as part of the HBase start and stop process. You can also manage the ZooKeeper ensemble independent of HBase
+and just point HBase at the cluster it should use. To toggle HBase management of ZooKeeper, use the _HBASE\_MANAGES\_ZK_ variable in
+conf/hbase-env.sh. This variable, which defaults to true, tells HBase whether to start and stop the ZooKeeper ensemble servers as part of the start
+and stop commands supplied by HBase. When HBase manages the ZooKeeper ensemble, you can specify the ZooKeeper configuration options directly in
+_conf/hbase-site.xml_. You can set a ZooKeeper configuration option as a property in the _hbase-site.xml_ configuration file by prefixing the
+ZooKeeper option name with _hbase.zookeeper.property_. You must at least set the ensemble servers with the
 _hbase.zookeeper.quorum_ property, otherwise it defaults to single node ensemble. Some important properties are:
 
     * zookeeper.: Specifies client settings for the ZooKeeper client used by the HBase client library
     * hbase.zookeeper.: Used for values pertaining to the HBase client communicating to the ZooKeeper servers
     * hbase.zookeeper.properties: These are only used when HBase is also managing the ZooKeeper ensemble
 
-To point HBase at an existing ZooKeeper cluster, set _HBASE\_MANAGES\_ZK_ in _conf/hbase-env.sh_ to false. Next, set the
-ensemble locations and client port (if nonstandard), in _hbase-site.xml_.
+To point HBase at an existing ZooKeeper cluster, set _HBASE\_MANAGES\_ZK_ in _conf/hbase-env.sh_ to false. Next, set the ensemble locations and client
+port (if nonstandard), in _hbase-site.xml_.
 
 ### Configuration
 
@@ -299,17 +282,16 @@ The following is a list of the most important configuration files for hbase:
     * hbase-policy.xml: In secure mode, this file defines the authorization rules for clients accessing the servers
     * log4j.properties: Configures how each process logs its information using the Log4J libraries
 
-When running in distributed mode, after you make an edit to a HBase configuration file, make sure you copy the content of the
-conf directory to all nodes of the cluster. HBase will not do this for you. The servers always read the hbase-default.xml
-file first and subsequently merge it with the hbase-site.xml file content (if present). Most changes here will require a
-cluster restart for HBase to notice the change. However, there is a way to reload some specific settings while the processes
-are running. Properties in this two files takes precedence over any Hadoop configuration file containing a property with the
-same name.
+When running in distributed mode, after you make an edit to a HBase configuration file, make sure you copy the content of the conf directory to all
+nodes of the cluster. HBase will not do this for you. The servers always read the hbase-default.xml file first and subsequently merge it with the
+hbase-site.xml file content (if present). Most changes here will require a cluster restart for HBase to notice the change. However, there is a way to
+reload some specific settings while the processes are running. Properties in this two files takes precedence over any Hadoop configuration file
+containing a property with the same name.
 
 #### Client Configuration
 
-Since the HBase Master may move around between physical machines, clients start by requesting the vital information from
-ZooKeeper, therefore clients require the ZooKeeper quorum information in a _hbase-site.xml_ file on their Java _$CLASSPATH_.
+Since the HBase Master may move around between physical machines, clients start by requesting the vital information from ZooKeeper, therefore clients
+require the ZooKeeper quorum information in a _hbase-site.xml_ file on their Java _$CLASSPATH_.
 
 ### Deployment
 
@@ -326,30 +308,28 @@ Several approaches can be taken to perform deployment of the hbase distribution 
 
 ### Web-based UI Introduction
 
-HBase starts a web-based UI listing vital attributes, which is deployed on the master host at port 16010 (default). This page
-has information about available region servers, as well as any optional backup masters. This is followed by the known tables,
-system tables, and snapshots. It also contains information about currently running tasks, for example, the RPC handler
-status, active calls, and so on. Finally the bottom of the page has the attributes pertaining to the cluster setup.
+HBase starts a web-based UI listing vital attributes, which is deployed on the master host at port 16010 (default). This page has information about
+available region servers, as well as any optional backup masters. This is followed by the known tables, system tables, and snapshots. It also contains
+information about currently running tasks, for example, the RPC handler status, active calls, and so on. Finally the bottom of the page has the
+attributes pertaining to the cluster setup.
 
 #### Shell Introduction
 
-The HBase Shell is (J)Ruby’s IRB with some HBase-related commands added. Find more by typing _help_ to see a listing of shell
-commands and options.
+The HBase Shell is (J)Ruby’s IRB with some HBase-related commands added. Find more by typing _help_ to see a listing of shell commands and options.
 
 ## Chapter 3: Client API: The Basics<a name="Chapter3"></a>
 
 ### General notes
 
-The primary client entry point to HBase is the _Table_ interface in the _org.apache.hadoop.hbase.client_ package which is
-retrieved by means of the _Connection_ instance. All operations that mutate data are guaranteed to be atomic on a per-row
-basis (irrespective of the number of columns. As a general rule, try to batch updates together to reduce the number of
-separate operations on the same row as much as possible. Creating an initial connection to HBase is heavy as each
-instantiation involves scanning the _hbase:meta_ table to check if the table actually exists and if it is enabled, as well as
-a few other operations.
+The primary client entry point to HBase is the _Table_ interface in the _org.apache.hadoop.hbase.client_ package which is retrieved by means of the _
+Connection_ instance. All operations that mutate data are guaranteed to be atomic on a per-row basis (irrespective of the number of columns. As a
+general rule, try to batch updates together to reduce the number of separate operations on the same row as much as possible. Creating an initial
+connection to HBase is heavy as each instantiation involves scanning the _hbase:meta_ table to check if the table actually exists and if it is
+enabled, as well as a few other operations.
 
-Create a _Connection_ instance only once and reuse it for the rest of the lifetime of your client application. Once you have
-a connection instance you can retrieve references to the actual tables. Ideally you do this per thread since the underlying
-implementation of Table is not guaranteed to the thread-safe. Make sure to close the connection once you are done.
+Create a _Connection_ instance only once and reuse it for the rest of the lifetime of your client application. Once you have a connection instance you
+can retrieve references to the actual tables. Ideally you do this per thread since the underlying implementation of Table is not guaranteed to the
+thread-safe. Make sure to close the connection once you are done.
 
 ### Data Types and Hierarchy
 
@@ -364,8 +344,8 @@ There are several data centric classes (operations):
 
 #### Generic Attributes
 
-The interface _Attribute_ provides a general mechanism to add any kind of information in form of attributes to all the
-data-centric classes. It has the following methods:
+The interface _Attribute_ provides a general mechanism to add any kind of information in form of attributes to all the data-centric classes. It has
+the following methods:
 
 ```
 Attributes setAttribute(String name,byte[]value);
@@ -401,9 +381,8 @@ String toString(int maxCols)
 String toString()
 ```
 
-This class helps in generating useful information collections for logging and general debugging purposes. The intermediate
-OperationWithAttributes class is extending the above Operation class, implements the Attributes interface, and is adding the
-following methods, which are used in conjunction:
+This class helps in generating useful information collections for logging and general debugging purposes. The intermediate OperationWithAttributes
+class is extending the above Operation class, implements the Attributes interface, and is adding the following methods, which are used in conjunction:
 
 ```
 OperationWithAttributes setId(String id)
@@ -443,8 +422,8 @@ Other methods in the mutation class:
     * heapSize(): Computes the heap space required for the current Put instance. This includes all contained data and space
       needed for internal structures
 
-The other larger superclass on the retrieval side is Query, which provides a common substrate for all data types concerned
-with reading data from the HBase tables:
+The other larger superclass on the retrieval side is Query, which provides a common substrate for all data types concerned with reading data from the
+HBase tables:
 
     * getAuthorizations()/setAuthorizations(): Visibility labels for the operation
     * getACL()/setACL(): The Access Control List (ACL) for this operation
@@ -455,8 +434,8 @@ with reading data from the HBase tables:
 
 #### Durability, Consistency, and Isolation
 
-Some properties set on read/write operation makes use of enums to set some specifics about the operation itself. For example
-to set the durability levels:
+Some properties set on read/write operation makes use of enums to set some specifics about the operation itself. For example to set the durability
+levels:
 
     * USE_DEFAULT: For tables use the global default setting, which is SYNC_WAL. For a mutation use the table’s default value 
     * SKIP_WAL: Do not write the mutation to the WAL
@@ -464,17 +443,16 @@ to set the durability levels:
     * SYNC_WAL: Write the mutation synchronously to the WAL 
     * FSYNC_WAL: Write the Mutation to the WAL synchronously and force the entries to disk
 
-Durability lets you decide how important your data is to you, just because the client library you are using accepts the
-operation does not imply that it has been applied, or persisted even.
+Durability lets you decide how important your data is to you, just because the client library you are using accepts the operation does not imply that
+it has been applied, or persisted even.
 
 On the read side, we can control how consistent is the data read, the options are:
 
     * STRONG: Strong consistency as per the default of HBase. Data is always current
     * TIMELINE: Replicas may not be consistent with each other, updates are guaranteed to be applied in order in all replicas
 
-HBase always writes and commits all changes strictly serially, which means that completed transactions are always presented
-in the exact same order. The `isStale()` method is used to check if we have retrieved data from a replica, not the
-authoritative master.
+HBase always writes and commits all changes strictly serially, which means that completed transactions are always presented in the exact same order.
+The `isStale()` method is used to check if we have retrieved data from a replica, not the authoritative master.
 
 On the read side, you can also set the isolation level (on the Query superclass). The options are:
 
@@ -483,19 +461,17 @@ On the read side, you can also set the isolation level (on the Query superclass)
 
 #### The Cell
 
-A cell instance contains the data as well as the coordinates (row key, name of the column family, column qualifier, and
-timestamp) of one specific cell. _Cell_ is an interface, but the implementing class, named _KeyValue_ is private and cannot
-be instantiated either. The _CellUtil_ class, among many other convenience functions, provides the necessary methods to
-create an instance for us. The data as well as the coordinates are stored as a `Java byte[]` to allow for any arbitrary data
-and to efficiently store only the required bytes, keeping the overhead of internal data structures to a minimum (hence there
-is an Offset and Length parameter for each byte array parameter). A _Cell_ has a type, which can be one of `Put`,`Delete`,
+A cell instance contains the data as well as the coordinates (row key, name of the column family, column qualifier, and timestamp) of one specific
+cell. _Cell_ is an interface, but the implementing class, named _KeyValue_ is private and cannot be instantiated either. The _CellUtil_ class, among
+many other convenience functions, provides the necessary methods to create an instance for us. The data as well as the coordinates are stored as
+a `Java byte[]` to allow for any arbitrary data and to efficiently store only the required bytes, keeping the overhead of internal data structures to
+a minimum (hence there is an Offset and Length parameter for each byte array parameter). A _Cell_ has a type, which can be one of `Put`,`Delete`,
 `DeleteFamilyVersion` (deletes all columns of a column family matching a specific timestamp), `DeleteColumn`,
 `DeleteFamily`. The `toString()` method of a cell instance, prints the following information:
 `<row-key>/<family>:<qualifier>/<version>/<type>/<value-length>/<sequence-id>`.
 
-The _CellComparator_ class is the base to classes that compare given cell instances using the Java _Comparator_ pattern. One
-class is publicly available as an inner class of _CellComparator_, namely the _RowComparator_. You can use this class to
-compare cells by the given row key.
+The _CellComparator_ class is the base to classes that compare given cell instances using the Java _Comparator_ pattern. One class is publicly
+available as an inner class of _CellComparator_, namely the _RowComparator_. You can use this class to compare cells by the given row key.
 
 #### API Building Blocks
 
@@ -521,9 +497,8 @@ connection.close();
 
 ##### Resource Sharing
 
-Every instance of _Table_ requires a connection to the remote servers, which is handled by the _Connection_ implementation
-instance, acquired using the _ConnectionFactory_. Reuse the connection as every connection does a lot of internal resource
-handling like:
+Every instance of _Table_ requires a connection to the remote servers, which is handled by the _Connection_ implementation instance, acquired using
+the _ConnectionFactory_. Reuse the connection as every connection does a lot of internal resource handling like:
 
     * Share ZooKeeper Connections: Initial lookup of where user table regions are located
     * Cache Common Resources: Every zookeeper lookup requires a round network call, but the location is then cached on 
@@ -537,16 +512,16 @@ CRUD operations are provided by the _Table_ interface.
 
 #### Put Method
 
-Put operations can be split into those that work on single rows, those that work on lists of rows, and one that provides a
-server-side, atomic check-and-put.
+Put operations can be split into those that work on single rows, those that work on lists of rows, and one that provides a server-side, atomic
+check-and-put.
 
 ##### Single Puts
 
-This is the general put operation: `void put(Put put) throws IOException` which depending on the constructor used, would have
-a different effect. You need to supply a row to create a _Put_ instance, and a row in HBase is identified by a unique row
-key (a Java byte[] array). HBase provide us with a helper class that has many static methods to convert Java types into
-byte[] arrays. i.e. `byte[] rowkey = Bytes.toBytes("row_key_id");`. there are also constructor variants that take an existing
-byte array and, respecting a given offset and length parameter, copy the row key bits from the given array instead. i.e:
+This is the general put operation: `void put(Put put) throws IOException` which depending on the constructor used, would have a different effect. You
+need to supply a row to create a _Put_ instance, and a row in HBase is identified by a unique row key (a Java byte[] array). HBase provide us with a
+helper class that has many static methods to convert Java types into byte[] arrays. i.e. `byte[] rowkey = Bytes.toBytes("row_key_id");`. there are
+also constructor variants that take an existing byte array and, respecting a given offset and length parameter, copy the row key bits from the given
+array instead. i.e:
 
 ```
 System.arraycopy("user".getBytes(Charset.forName("UTF8"), 0, dest_array, 45, user‐name_bytes.length);
@@ -554,12 +529,11 @@ Put put = new Put(data, 45, username_bytes.length);
 ```
 
 There are as well constructors with buffers and even other _Put_ instances (to clone it). Once you have the _Put_
-instance, you can add data to it. Each call to `addColumn()` specifies exactly one column, or, in combination with an
-optional timestamp, one single cell. Calling any of the `addXX()` methods in a _Put_ instance will internally create a _Cell_
-instance. There are copies of each `addColumn()`, named `addImmutable()`, which do the same as their counterpart, apart from
-not copying the given byte arrays. The variant that takes an existing _Cell_ instance is for users that knows how to
-retrieve, or create, this low-level class. To check for the existence of specific cells, you can use any variant of
-the `boolean has(...)` method, which returns true if a match is found.
+instance, you can add data to it. Each call to `addColumn()` specifies exactly one column, or, in combination with an optional timestamp, one single
+cell. Calling any of the `addXX()` methods in a _Put_ instance will internally create a _Cell_
+instance. There are copies of each `addColumn()`, named `addImmutable()`, which do the same as their counterpart, apart from not copying the given
+byte arrays. The variant that takes an existing _Cell_ instance is for users that knows how to retrieve, or create, this low-level class. To check for
+the existence of specific cells, you can use any variant of the `boolean has(...)` method, which returns true if a match is found.
 
     * cellScanner(): Provides a scanner over all cells available in this instance
     * getACL()/setACL(): The ACLs for this operation 
@@ -596,10 +570,10 @@ connection.close();
 
 ##### Client-side Write Buffer
 
-Each _Put_ operation is a remote producure call (RPC) which transfers data from the client to the server and back. To reduce
-the number of round trips and hence response time, the HBase API comes with a built-in client-side write buffer that collects
-put and delete operations so that they are sent in one RPC call to the server(s). The entry point to this functionality is
-the _BufferedMutator_ class (thread safe). It is obtained from the _Connection_ class using one of these methods:
+Each _Put_ operation is a remote producure call (RPC) which transfers data from the client to the server and back. To reduce the number of round trips
+and hence response time, the HBase API comes with a built-in client-side write buffer that collects put and delete operations so that they are sent in
+one RPC call to the server(s). The entry point to this functionality is the _BufferedMutator_ class (thread safe). It is obtained from the _
+Connection_ class using one of these methods:
 
 ```
 BufferedMutator getBufferedMutator(TableName tableName) throws IOException
@@ -648,8 +622,7 @@ connection.close();
 
 ##### List of Puts
 
-It is also possible to batch a set of put operations through the method `void put(List<Put> puts) throws IOException` of
-the _Table_ class:
+It is also possible to batch a set of put operations through the method `void put(List<Put> puts) throws IOException` of the _Table_ class:
 
 ```
 List<Put> puts = new ArrayList<Put>();
@@ -657,11 +630,10 @@ List<Put> puts = new ArrayList<Put>();
 table.put(puts);
 ```
 
-Since you are issuing a list of row mutations to possibly many rows, there is a chance that not all of them will succeed. If
-this happens, an _IOException_ is thrown. The servers iterate over all operations and try to apply them. The failed ones are
-returned, and the client reports the remote error using the _RetriesExhaustedWithDetailsException_, giving you insight into
-how many operations have failed, with what error, and how many times it has retried to apply the erroneous modification. Some
-methods of the _RetriesExhaustedWithDetailsException_ class:
+Since you are issuing a list of row mutations to possibly many rows, there is a chance that not all of them will succeed. If this happens, an _
+IOException_ is thrown. The servers iterate over all operations and try to apply them. The failed ones are returned, and the client reports the remote
+error using the _RetriesExhaustedWithDetailsException_, giving you insight into how many operations have failed, with what error, and how many times
+it has retried to apply the erroneous modification. Some methods of the _RetriesExhaustedWithDetailsException_ class:
 
     * getCauses(): Returns a summary of all causes for all failed operations
     * getExhaustiveDescription(): More detailed list of all the failures that were detected
@@ -671,13 +643,12 @@ methods of the _RetriesExhaustedWithDetailsException_ class:
     * getRow(int i): Returns the specific mutation instance that failed
     * mayHaveClusterIssues(): Allows to determine if there are wider problems with the cluster
 
-The MaxKeyValueSize check is done as well for a list of puts. The list-based `put()` call uses the client-side write buffer
-in form of an internal instance of _BatchMutator_ to insert all puts into the local buffer and then to call `flush()`
-implicitly. While inserting each instance of Put, the client API performs the mentioned check. If it fails, for example, at
-the third put out of five, the first two are added to the buffer while the last two are not, and the flush command is not
-triggered. You need to keep inserting puts in the list or call the close() to trigger a flush. Also, you cannot control the
-order in which the puts are applied on the server-side. Because of this, _BufferedMutator_ is preferred over the put list on
-the _Table_ class.
+The MaxKeyValueSize check is done as well for a list of puts. The list-based `put()` call uses the client-side write buffer in form of an internal
+instance of _BatchMutator_ to insert all puts into the local buffer and then to call `flush()`
+implicitly. While inserting each instance of Put, the client API performs the mentioned check. If it fails, for example, at the third put out of five,
+the first two are added to the buffer while the last two are not, and the flush command is not triggered. You need to keep inserting puts in the list
+or call the close() to trigger a flush. Also, you cannot control the order in which the puts are applied on the server-side. Because of this, _
+BufferedMutator_ is preferred over the put list on the _Table_ class.
 
 ##### Atomic Check-and-Put
 
@@ -688,12 +659,11 @@ boolean checkAndPut(byte[] row, byte[] family, byte[] qualifier, byte[] value, P
 boolean checkAndPut(byte[] row, byte[] family, byte[] qualifier, CompareFilter.CompareOp compareOp, byte[] value, Put put) throws IOException
 ```
 
-These calls allow you to issue atomic, server-side mutations that are guarded by an accompanying check. If the check passes
-successfully, the put operation is executed; otherwise, it aborts the operation completely. The first call implies that the
-given value has to be equal to the stored one. The second call lets you specify the actual comparison operator. An usage
-example of this is to update if another value is not already present by setting the _value_ parameter to _null_. The call
-returns a boolean result value, indicating whether the Put has been applied or not. atomicity guarantees applies only on
-single rows.
+These calls allow you to issue atomic, server-side mutations that are guarded by an accompanying check. If the check passes successfully, the put
+operation is executed; otherwise, it aborts the operation completely. The first call implies that the given value has to be equal to the stored one.
+The second call lets you specify the actual comparison operator. An usage example of this is to update if another value is not already present by
+setting the _value_ parameter to _null_. The call returns a boolean result value, indicating whether the Put has been applied or not. atomicity
+guarantees applies only on single rows.
 
 #### Get Method
 
@@ -778,12 +748,12 @@ Additional methods of the _Get_ class:
     * toMap()/toMap(int): Converts the first 5 or N columns into a map
     * toString()/toString(int): Converts the first 5 or N columns to a JSON, or map (if JSON fails due to encoding problems)
 
-`setCacheBlocks()` and `getCacheBlocks()` controls how the read operation is handled on the server-side. Each HBase region
-server has a block cache that efficiently retains recently accessed data for subsequent reads of contiguous information. In
-some events it is better to not engage the cache to avoid too much churn when doing completely random gets.
-`setCheckExistenceOnly()` and `isCheckExistenceOnly()` combination allows the client to check if a specific set of columns,
-or column families are already existent. If multiple checks exists, they are added with the or operator (returns true if one
-exists). The _Table_ class has another way of checking for the existence of data in a table:
+`setCacheBlocks()` and `getCacheBlocks()` controls how the read operation is handled on the server-side. Each HBase region server has a block cache
+that efficiently retains recently accessed data for subsequent reads of contiguous information. In some events it is better to not engage the cache to
+avoid too much churn when doing completely random gets.
+`setCheckExistenceOnly()` and `isCheckExistenceOnly()` combination allows the client to check if a specific set of columns, or column families are
+already existent. If multiple checks exists, they are added with the or operator (returns true if one exists). The _Table_ class has another way of
+checking for the existence of data in a table:
 
 ```
 boolean exists(Get get) throws IOException
@@ -794,8 +764,8 @@ boolean[] existsAll(List<Get> gets) throws IOException;
 would return the previous row to the one you are looking specifically if it does not find a match. In the case this  
 behaviour is triggered, the entire row is returned and not only a set of columns.
 `getMaxResultsPerColumnFamily()`, `setMaxResultsPerColumnFamily()`, `getRowOffsetPerColumnFamily()`, and
-`setRowOffsetPerColumnFamily()` works in tandem to allow the client to page through a wide row, setting the maximum amount of
-cells returned by a get request or an optional offset into the row:
+`setRowOffsetPerColumnFamily()` works in tandem to allow the client to page through a wide row, setting the maximum amount of cells returned by a get
+request or an optional offset into the row:
 
 ```
 Get get1 = new Get(Bytes.toBytes("row1"));
@@ -811,8 +781,8 @@ The above really works in cells, not columns, so remember that when iterating ov
 
 ##### The Result class
 
-The result class provides you with the means to access everything that was returned from the server for the given row and
-matching the specified query, such as column family, column qualifier, timestamp, and so on. Some of the methods:
+The result class provides you with the means to access everything that was returned from the server for the given row and matching the specified
+query, such as column family, column qualifier, timestamp, and so on. Some of the methods:
 
 ```
 byte[] getRow()
@@ -830,10 +800,9 @@ boolean isEmpty()
 int size()
 ```
 
-Some of the methods to return data clone the underlying byte array so that no modification is possible. Yet others do not and
-you have to take care not to modify the returned arrays. Some of the methods in the Result class are more column oriented,
-for example `getColumnCells()` method you ask for multiple values of a specific column, allowing you to get multiple versions
-of a given column. Methods that operates in columns are described below:
+Some of the methods to return data clone the underlying byte array so that no modification is possible. Yet others do not and you have to take care
+not to modify the returned arrays. Some of the methods in the Result class are more column oriented, for example `getColumnCells()` method you ask for
+multiple values of a specific column, allowing you to get multiple versions of a given column. Methods that operates in columns are described below:
 
 ```
 List<Cell> getColumnCells(byte[] family, byte[] qualifier)
@@ -886,8 +855,8 @@ Result[] results = table.get(gets);
 // More code
 ```
 
-Errors are reported back to you differently than with the Puts. The `get()` call either returns the said array, matching the
-same size as the given list by the gets parameter, or throws an exception and not returning a result at all.
+Errors are reported back to you differently than with the Puts. The `get()` call either returns the said array, matching the same size as the given
+list by the gets parameter, or throws an exception and not returning a result at all.
 
 #### Delete Method
 
@@ -926,14 +895,13 @@ Delete addColumn(byte[] family, byte[] qualifier, long timestamp) // narrowed by
 void setTimestamp(long timestamp) // Set timestamp for all subsequent addXXX(...) calls
 ```
 
-The handling of the explicit versus implicit timestamps is the same for all `addXYZ()` methods, if not specified, the
-optional one from the constructor or a previous call to `setTimestamp()` is used. If that was not set either, then
-_HConstants.LATEST_TIME STAMP_ is used, meaning all versions will be affected by the delete. Not setting the timestamp forces
-the server to retrieve the latest timestamp on the server side on your behalf. This is slower than performing a delete with
-an explicit timestamp. For advanced user there is an additional method
-available `Delete addDeleteMarker(Cell kv) throws IOException`, which checks that the provided _Cell_ instance is of type
-delete, and that the row key matches the one of the current delete instance. If that holds true, the cell is added as-is to
-the family it came from. The _Delete_ class has other methods too:
+The handling of the explicit versus implicit timestamps is the same for all `addXYZ()` methods, if not specified, the optional one from the
+constructor or a previous call to `setTimestamp()` is used. If that was not set either, then
+_HConstants.LATEST_TIME STAMP_ is used, meaning all versions will be affected by the delete. Not setting the timestamp forces the server to retrieve
+the latest timestamp on the server side on your behalf. This is slower than performing a delete with an explicit timestamp. For advanced user there is
+an additional method available `Delete addDeleteMarker(Cell kv) throws IOException`, which checks that the provided _Cell_ instance is of type delete,
+and that the row key matches the one of the current delete instance. If that holds true, the cell is added as-is to the family it came from. The _
+Delete_ class has other methods too:
 
     * cellScanner(): Provides a scanner over all cells available in this instance.
     * getACL()/setACL(): The ACLs for this operation (might be null).
@@ -958,13 +926,12 @@ the family it came from. The _Delete_ class has other methods too:
 
 ##### List of Deletes
 
-In the _Table_ class there is a method `void delete(List<Delete> deletes) throws IOException` similar to the Put list seing
-before. Just as with the other list-based operation, you cannot make any assumption regarding the order in which the deletes
-are applied on the remote servers. The API is free to reorder them to make efficient use of the single RPC per affected
-region server. Regarding the error handling, the list-based `delete()` call is modified to only contain the failed delete
-instances when the call returns. In other words, when everything has succeeded, the list will be empty. The call also throws
-the exception—if there was one—reported from the remote servers (for example if a wrong familly name is passed) with an
-exception of type _RetriesExhaustedWithDetailsException_.
+In the _Table_ class there is a method `void delete(List<Delete> deletes) throws IOException` similar to the Put list seing before. Just as with the
+other list-based operation, you cannot make any assumption regarding the order in which the deletes are applied on the remote servers. The API is free
+to reorder them to make efficient use of the single RPC per affected region server. Regarding the error handling, the list-based `delete()` call is
+modified to only contain the failed delete instances when the call returns. In other words, when everything has succeeded, the list will be empty. The
+call also throws the exception—if there was one—reported from the remote servers (for example if a wrong familly name is passed) with an exception of
+type _RetriesExhaustedWithDetailsException_.
 
 ##### Atomic Check-and-Delete
 
@@ -981,11 +948,11 @@ boolean checkAndDelete(
     Delete delete) throws IOException
 ```
 
-You need to specify the row key, column family, qualifier, and value to check before the delete operation is performed. The
-first call implies that the given value has to equal to the stored one. The second call lets you specify the actual
-comparison operator. If the test fails, nothing is deleted and the call returns false. Using null as the value parameter
-triggers the nonexistence test, which is successful if the column specified does not exist. You can only perform the check
-and modify on the same row, if you pass a _Delete_ instance pointing to a different row, the operation will fail.
+You need to specify the row key, column family, qualifier, and value to check before the delete operation is performed. The first call implies that
+the given value has to equal to the stored one. The second call lets you specify the actual comparison operator. If the test fails, nothing is deleted
+and the call returns false. Using null as the value parameter triggers the nonexistence test, which is successful if the column specified does not
+exist. You can only perform the check and modify on the same row, if you pass a _Delete_ instance pointing to a different row, the operation will
+fail.
 
 #### Append Method
 
@@ -1008,9 +975,8 @@ Append add(byte[] family, byte[] qualifier, byte[] value) // column family, qual
 Append add(final Cell cell) // copies all of these parameters from an existing cell instance
 ```
 
-You must call one of those functions, or else a subsequent call to `append()` will throw an exception. One special option
-of `append()` is to not return any data from the servers. This is accomplished with this pair of methods (usually, the newly
-updated cells are returned to the caller):
+You must call one of those functions, or else a subsequent call to `append()` will throw an exception. One special option of `append()` is to not
+return any data from the servers. This is accomplished with this pair of methods (usually, the newly updated cells are returned to the caller):
 
 ```
 Append setReturnResults(boolean returnResults) // will return null instead
@@ -1024,9 +990,9 @@ Most of the methods of the _Append_ class comes from the superclasses and have b
 ##### Single Mutations
 
 If you want to update a row across operations, and doing so atomically, you can use `mutateRow()`, which has the following
-signature `void mutateRow(final RowMutations rm) throws IOException`. The _RowMutations_ based parameter is a container that
-accepts either _Put_ or _Delete_ instance, and then applies both in one call to the server-side data. The list of available
-constructors and methods for the RowMutations class is:
+signature `void mutateRow(final RowMutations rm) throws IOException`. The _RowMutations_ based parameter is a container that accepts either _Put_ or _
+Delete_ instance, and then applies both in one call to the server-side data. The list of available constructors and methods for the RowMutations class
+is:
 
 ```
 RowMutations(byte[] row)
@@ -1068,14 +1034,13 @@ public boolean checkAndMutate(
         final RowMutations rm) throws IOException
 ```
 
-Again, using null as the value parameter triggers the non‐existence test, that is, the check is successful if the column
-specified does not exist. You can only perform the check-and-modify operation on the same row or else it will throw an
-exception.
+Again, using null as the value parameter triggers the non‐existence test, that is, the check is successful if the column specified does not exist. You
+can only perform the check-and-modify operation on the same row or else it will throw an exception.
 
 ### Batch Operations
 
-Now we will have a look at the API calls to batch different operations across multiple rows. As a note, avoid the previously
-described list calls and use the batch counterpart instead. The following methods on the _Table_ class are batch:
+Now we will have a look at the API calls to batch different operations across multiple rows. As a note, avoid the previously described list calls and
+use the batch counterpart instead. The following methods on the _Table_ class are batch:
 
 ```
 // Row is a superclass of all Mutation classes
@@ -1091,17 +1056,15 @@ The general contract of the batch calls is that they return a best match result 
     * Result: Returned for successful Get operations, but may also be empty when there was no matching row or column
     * Throwable: In case the servers return an exception for the operation it is returned to the client as-is
 
-All the operations are grouped by the destination region servers first and then sent to the servers. Also, all batch
-operations are executed before the results are checked: even if you receive an error for one of the actions, all the other
-ones have been applied.
+All the operations are grouped by the destination region servers first and then sent to the servers. Also, all batch operations are executed before
+the results are checked: even if you receive an error for one of the actions, all the other ones have been applied.
 
 ### Scans
 
 #### Introduction
 
-Scans are similar to cursors in database systems, similar to the _Get_ operations. Since scans are similar to iterators,
-there is no `scan()` call, but rather a `getScanner()` which returns a _ResultScanner_ instance that you can iterate over.
-The available methods are:
+Scans are similar to cursors in database systems, similar to the _Get_ operations. Since scans are similar to iterators, there is no `scan()` call,
+but rather a `getScanner()` which returns a _ResultScanner_ instance that you can iterate over. The available methods are:
 
 ```
 ResultScanner getScanner(Scan scan) throws IOException
@@ -1120,15 +1083,14 @@ Scan(Scan scan) throws IOException
 Scan(Get get)
 ```
 
-Instead of specifying a single row key, you now can optionally provide a _startRow_ (inclusive) parameter—defining the row
-key where the scan begins to read from the HBase table. The optional _stopRow_ (exclusive) parameter can be used to limit the
-scan to a specific row key where it should conclude the reading. With scans, you do not need to have an exact match for
-either of these rows. Instead, the scan will match the first row key that is equal to or larger than the given start row. If
-no start row is provided, it will start from the beginning of the table. It will also end its work when the current row key
-is equal to or greater than the optional stop row. If no stop row was specified, the scan will run to the end of the table.
-The get and scan functionality is the same on the server side, but for a _Get_ the scan has to include the stop row into the
-scan, since both, the start and stop row are set to the same value. The _Get_ instance would return true as well when the
-method `boolean isGetScan()` is called. To narrow down the scan results, you can use one of the following methods:
+Instead of specifying a single row key, you now can optionally provide a _startRow_ (inclusive) parameter—defining the row key where the scan begins
+to read from the HBase table. The optional _stopRow_ (exclusive) parameter can be used to limit the scan to a specific row key where it should
+conclude the reading. With scans, you do not need to have an exact match for either of these rows. Instead, the scan will match the first row key that
+is equal to or larger than the given start row. If no start row is provided, it will start from the beginning of the table. It will also end its work
+when the current row key is equal to or greater than the optional stop row. If no stop row was specified, the scan will run to the end of the table.
+The get and scan functionality is the same on the server side, but for a _Get_ the scan has to include the stop row into the scan, since both, the
+start and stop row are set to the same value. The _Get_ instance would return true as well when the method `boolean isGetScan()` is called. To narrow
+down the scan results, you can use one of the following methods:
 
 ```
 Scan addFamily(byte [] family)
@@ -1179,8 +1141,8 @@ boolean isSmall()
 ```
 
 When using reverse scans you need to flip around any start and stop row value, or you will not find anything at all. Calling
-`setSmall(true)` on a scan instance instructs the client API to not do the usual open scanner, fetch data, and close scanner
-combination of remote procedure calls, but do them in one single call (size should ideally be less than one data block).
+`setSmall(true)` on a scan instance instructs the client API to not do the usual open scanner, fetch data, and close scanner combination of remote
+procedure calls, but do them in one single call (size should ideally be less than one data block).
 
 #### The ResultScanner Class
 
@@ -1193,8 +1155,8 @@ Result[] next(int nbRows) throws IOException // The result array might be shorte
 void close() // Required to release all the resources a scan may hold 
 ```
 
-Release a scanner instance as quickly as possible as an open scanner holds quite a few resources on the server side. This
-time can be configured with the following property in the hbase-site.xml:
+Release a scanner instance as quickly as possible as an open scanner holds quite a few resources on the server side. This time can be configured with
+the following property in the hbase-site.xml:
 
 ```xml
 
@@ -1206,8 +1168,8 @@ time can be configured with the following property in the hbase-site.xml:
 
 #### Scanner Caching
 
-Each call to `next()` or `next(int nbRows)` is a separate RPC for every row, but sometimes it makes sense to fetch more than
-one row per RPC if possible. This is called _scanner caching_ and is enabled by default. _hbase.client.scanner.caching_
+Each call to `next()` or `next(int nbRows)` is a separate RPC for every row, but sometimes it makes sense to fetch more than one row per RPC if
+possible. This is called _scanner caching_ and is enabled by default. _hbase.client.scanner.caching_
 controls the default caching for all scans (defaults to 100). This can be overwritten at the _Scan_ class with the methods:
 
 ```
@@ -1215,30 +1177,28 @@ void setCaching(int caching)
 int getCaching()
 ```
 
-Values to set here should be chosen carefully, because when the time taken to transfer the rows to the client, or to process
-the data on the client, exceeds the configured scanner lease threshold, you will end up receiving a lease expired error, in
-the form of a _ScannerTimeoutException_ being thrown. If you want to change the lease period setting you need to add the
-appropriate configuration key to the hbase-site.xml file on the region servers.
+Values to set here should be chosen carefully, because when the time taken to transfer the rows to the client, or to process the data on the client,
+exceeds the configured scanner lease threshold, you will end up receiving a lease expired error, in the form of a _ScannerTimeoutException_ being
+thrown. If you want to change the lease period setting you need to add the appropriate configuration key to the hbase-site.xml file on the region
+servers.
 
 #### Scanner Batching
 
-The previous technique of caching doesn't work well when the rows to retrieve are huge, but in this situations you can use
-batching, which is configurable at the _Scan_ class:
+The previous technique of caching doesn't work well when the rows to retrieve are huge, but in this situations you can use batching, which is
+configurable at the _Scan_ class:
 
 ```
 void setBatch(int batch)
 int getBatch()
 ```
 
-Batching works at cell level, and controls how many cells are retrieved for every call to `next()` made. When a row contains
-more cells than the value you used for the batch, you will get the entire row piece by piece, with each next Result returned
-by the scanner. The combination of scanner caching and batch size can be used to control the number of RPCs required to scan
-the row key range selected.
+Batching works at cell level, and controls how many cells are retrieved for every call to `next()` made. When a row contains more cells than the value
+you used for the batch, you will get the entire row piece by piece, with each next Result returned by the scanner. The combination of scanner caching
+and batch size can be used to control the number of RPCs required to scan the row key range selected.
 
-Batching cannot be combined with filters that return true from their `hasFilterRow()` method as filters can not deal with
-partial results, this is, the row being chunked into batches. It needs to see the entire row to make a filtering decision.
-Another combination disallowed is batching with small scans. If you try to set the scan batching and small scan flag
-together, you will receive an _IllegalArgumentException_.
+Batching cannot be combined with filters that return true from their `hasFilterRow()` method as filters can not deal with partial results, this is,
+the row being chunked into batches. It needs to see the entire row to make a filtering decision. Another combination disallowed is batching with small
+scans. If you try to set the scan batching and small scan flag together, you will receive an _IllegalArgumentException_.
 
 #### Slicing Rows
 
@@ -1263,11 +1223,11 @@ Boolean getLoadColumnFamiliesOnDemandValue()
 boolean doLoadColumnFamiliesOnDemand()
 ```
 
-This functionality is a read optimization, useful then for use-cases with a dependency between data in those families. This
-is achieved through calling `setLoadColumnFamiliesOnDemand(true)` and then passing a filter that implements the following
-method, returning a boolean flag `boolean isFamilyEssential(byte[] name) throws IOException`. When the servers scan the data,
-they first set up internal scanners for each column family. If load column families on demand is enabled and a filter set, it
-calls out to the filter and asks it to decide if an included column family is to be scanned or not.
+This functionality is a read optimization, useful then for use-cases with a dependency between data in those families. This is achieved through
+calling `setLoadColumnFamiliesOnDemand(true)` and then passing a filter that implements the following method, returning a boolean
+flag `boolean isFamilyEssential(byte[] name) throws IOException`. When the servers scan the data, they first set up internal scanners for each column
+family. If load column families on demand is enabled and a filter set, it calls out to the filter and asks it to decide if an included column family
+is to be scanned or not.
 
 #### Scanner Metrics
 
@@ -1318,8 +1278,8 @@ Other available methods on the _Table_ class:
 
 #### The Bytes Class
 
-Class used to convert native Java types, such as String, or long, into the raw, byte array format HBase supports natively.
-Most methods come in three variations, for example shown here for the _Long_ type:
+Class used to convert native Java types, such as String, or long, into the raw, byte array format HBase supports natively. Most methods come in three
+variations, for example shown here for the _Long_ type:
 
 ```
 static long toLong(byte[] bytes)
@@ -1344,19 +1304,19 @@ Other methods that are worthy to know:
 
 #### Introduction to Filters
 
-You can limit the data retrieved in the _Get_ or _Scan_ operations by passing a _Filter_, used for features such as selection
-of keys, or values, based on regular expressions. The _Filter_ interface is implemented by some provided HBase classes or you
-can define your own, Filters are applied at server side (predicate pushdown).
+You can limit the data retrieved in the _Get_ or _Scan_ operations by passing a _Filter_, used for features such as selection of keys, or values,
+based on regular expressions. The _Filter_ interface is implemented by some provided HBase classes or you can define your own, Filters are applied at
+server side (predicate pushdown).
 
 ##### The Filter Hierarchy
 
-The base interface as said before is _Filter_, the abstract class _FilterBase_ contains boilerplate for some common
-functionality and most concrete implementations of the _Filter_ extends from it. Set the filter in the _Get_ or _Scan_
-classes by using the method `setFilter(Filter filter)`. Some implementations of _Filter_ requires some extra parameters on
-instantiation, like the ones extending _CompareFilter_ which asks for two parameters.
+The base interface as said before is _Filter_, the abstract class _FilterBase_ contains boilerplate for some common functionality and most concrete
+implementations of the _Filter_ extends from it. Set the filter in the _Get_ or _Scan_
+classes by using the method `setFilter(Filter filter)`. Some implementations of _Filter_ requires some extra parameters on instantiation, like the
+ones extending _CompareFilter_ which asks for two parameters.
 
-Filters have access to the entire row they are applied to, as they might depend on row key, column qualifiers, actual value
-of a column, timestamps, and so on. Filters have no state and cannot span across multiple rows.
+Filters have access to the entire row they are applied to, as they might depend on row key, column qualifiers, actual value of a column, timestamps,
+and so on. Filters have no state and cannot span across multiple rows.
 
 ##### Comparison Operators
 
@@ -1372,8 +1332,8 @@ The possible comparison operators for CompareFilter-based filters are listed bel
 
 ##### Comparators
 
-The second type that you need to provide to _CompareFilter_ classes is a comparator, which is needed to compare various
-values and keys in different ways. These are derived from _ByteArrayComparable_, which implements the Java
+The second type that you need to provide to _CompareFilter_ classes is a comparator, which is needed to compare various values and keys in different
+ways. These are derived from _ByteArrayComparable_, which implements the Java
 _Comparable_ interface. Some specific examples of these are listed below:
 
     * LongComparator: Assumes the given value array is a Java Long number and uses Bytes.toLong() to convert it
@@ -1384,15 +1344,15 @@ _Comparable_ interface. Some specific examples of these are listed below:
     * RegexStringComparator: Given a regular expression at instantiation, this comparator does a pattern match on the data
     * SubstringComparator: Treats the value and table data as String instances and performs a contains() check
 
-Some of these constructors take a byte array, to do the binary comparison, while others take a string parameter. The later
-are computationally more expensive.
+Some of these constructors take a byte array, to do the binary comparison, while others take a string parameter. The later are computationally more
+expensive.
 
 #### Comparison Filters
 
 The comparison filters takes the comparison operator and comparator instance as described before. The constructor is:  
 `CompareFilter(final CompareOp compareOp, final ByteArrayComparable comparator)`
-Filters based on _CompareFilter_ are doing the opposite than normal filters, which is, defining which elements include in the
-result rather to which ones to exclude.
+Filters based on _CompareFilter_ are doing the opposite than normal filters, which is, defining which elements include in the result rather to which
+ones to exclude.
 
 ##### RowFilter
 
@@ -1436,8 +1396,8 @@ The above example returns cells with values like 'val-1.4','otherval-2.4','yetan
 
 ##### DependentColumnFilter
 
-This filter lets you specify a dependent column, or reference column, that controls how other columns are filtered. It uses
-the timestamp of the reference column and includes all other columns that have the same timestamp. The constructors are:
+This filter lets you specify a dependent column, or reference column, that controls how other columns are filtered. It uses the timestamp of the
+reference column and includes all other columns that have the same timestamp. The constructors are:
 
 ```
 DependentColumnFilter(final byte[] family, final byte[] qualifier)
@@ -1446,33 +1406,32 @@ DependentColumnFilter(final byte[] family, final byte[] qualifier, final boolean
     valueCompareOp, final ByteArrayComparable valueComparator)
 ```
 
-Think of it as a combination of a _ValueFilter_ and a filter selecting on a reference timestamp. This filter is not
-compatible with the batch feature of the scan operations, that is, setting `Scan.setBatch()` to a number larger than zero.
-The filter needs to see the entire row to do its work, and using batching will not carry the reference column timestamp over
-and would result in erroneous results. This filter is used where applications require client-side timestamps to track
-dependent updates.
+Think of it as a combination of a _ValueFilter_ and a filter selecting on a reference timestamp. This filter is not compatible with the batch feature
+of the scan operations, that is, setting `Scan.setBatch()` to a number larger than zero. The filter needs to see the entire row to do its work, and
+using batching will not carry the reference column timestamp over and would result in erroneous results. This filter is used where applications
+require client-side timestamps to track dependent updates.
 
 #### Dedicated Filters
 
-The second type of supplied filters are based directly on _FilterBase_, many of these filters are only really applicable when
-performing scan operations, since they filter out entire rows.
+The second type of supplied filters are based directly on _FilterBase_, many of these filters are only really applicable when performing scan
+operations, since they filter out entire rows.
 
 ##### PrefixFilter
 
 All rows with a row key matching this prefix are returned to the client. The constructor is:
 `PrefixFilter(final byte[] prefix)`
-The scan also is actively ended when the filter encounters a row key that is larger than the prefix. Combining this with a
-start row improves the overall performance of the scan as it has knowledge of when to skip the rest of the rows altogether.
+The scan also is actively ended when the filter encounters a row key that is larger than the prefix. Combining this with a start row improves the
+overall performance of the scan as it has knowledge of when to skip the rest of the rows altogether.
 
 ##### PageFilter
 
 When you create the instance, you specify a _pageSize_ parameter, which controls how many rows per page should be returned.
 `PageFilter(final long pageSize)`
-There is a fundamental issue with filtering on physically separate servers, as filters runs on different region servers in
-parallel and cannot retain or communicate their current state across those boundaries. Each filter is required to scan at
-least up to _pageCount_ rows before ending the scan. This means a slight inefficiency is given for the Page Filter as more
-rows are reported to the client than necessary. The client code would need to remember the last row that was returned, and
-then, when another iteration is about to start, set the start row of the scan accordingly. Example of usage:
+There is a fundamental issue with filtering on physically separate servers, as filters runs on different region servers in parallel and cannot retain
+or communicate their current state across those boundaries. Each filter is required to scan at least up to _pageCount_ rows before ending the scan.
+This means a slight inefficiency is given for the Page Filter as more rows are reported to the client than necessary. The client code would need to
+remember the last row that was returned, and then, when another iteration is about to start, set the start row of the scan accordingly. Example of
+usage:
 
 ```
 private static final byte[] POSTFIX = new byte[] { 0x00 };
@@ -1497,53 +1456,49 @@ while (true) {
 }
 ```
 
-Because of the lexicographical sorting of the row keys by HBase and the comparison taking care of finding the row keys in
-order, and the fact that the start key on a scan is always inclusive, you need to add an extra zero byte (smallest increment)
+Because of the lexicographical sorting of the row keys by HBase and the comparison taking care of finding the row keys in order, and the fact that the
+start key on a scan is always inclusive, you need to add an extra zero byte (smallest increment)
 to the previous key. This will ensure that the last seen row key is skipped and the next, in sorting order, is found.
 
 ##### KeyOnlyFilter
 
 This filter returns just the keys of each Cell, while omitting the actual data. The constructors of the filter are:
-`KeyOnlyFilter()` and `KeyOnlyFilter(boolean lenAsVal)`, when the latter is used and passed as true, the value returned is
-the length (in bytes) of the data.
+`KeyOnlyFilter()` and `KeyOnlyFilter(boolean lenAsVal)`, when the latter is used and passed as true, the value returned is the length (in bytes) of
+the data.
 
 ##### FirstKeyOnlyFilter
 
-Filter that allows you to get the first column of each row. Typically used by row counter type applications that only need to
-check if a row exists ( if there are no columns, the row ceases to exist). Another possible use case is to set the column
-qualifier to an epoch value, so this would sort the column with the oldest timestamp name as the first to retrieve. Combined
-with this filter, it is possible to retrieve the oldest (or newest if reversed) column from every row using a single scan.
-Another optimization feature provided by the filter is that it indicates to the region server applying the filter that the
-current row is done and that it should skip to the next one.
+Filter that allows you to get the first column of each row. Typically used by row counter type applications that only need to check if a row exists (
+if there are no columns, the row ceases to exist). Another possible use case is to set the column qualifier to an epoch value, so this would sort the
+column with the oldest timestamp name as the first to retrieve. Combined with this filter, it is possible to retrieve the oldest (or newest if
+reversed) column from every row using a single scan. Another optimization feature provided by the filter is that it indicates to the region server
+applying the filter that the current row is done and that it should skip to the next one.
 
 ##### FirstKeyValueMatchingQualifiersFilter
 
-Extension to the _FirstKeyOnlyFilter_, but instead of returning the first found cell, it instead returns all the columns of a
-row, up to a given column qualifier (if it has it, otherwise returns all columns). The constructor is
+Extension to the _FirstKeyOnlyFilter_, but instead of returning the first found cell, it instead returns all the columns of a row, up to a given
+column qualifier (if it has it, otherwise returns all columns). The constructor is
 `FirstKeyValueMatchingQualifiersFilter(Set<byte[]> qualifiers)`
-Note that you can pass several qualifiers, the filter is instructed to stop emitting cells when encountering one of the
-qualifiers provided.
+Note that you can pass several qualifiers, the filter is instructed to stop emitting cells when encountering one of the qualifiers provided.
 
 ##### InclusiveStopFilter
 
-The row boundaries of a scan are inclusive for the start row and exclusive for the stop row. This filter includes also the
-specified stop row.
+The row boundaries of a scan are inclusive for the start row and exclusive for the stop row. This filter includes also the specified stop row.
 
 ##### FuzzyRowFilter
 
-This filter acts on row keys, but in a fuzzy manner. It needs a list of row keys that should be returned, plus an
-accompanying byte[] array that signifies the importance of each byte in the row key:
+This filter acts on row keys, but in a fuzzy manner. It needs a list of row keys that should be returned, plus an accompanying byte[] array that
+signifies the importance of each byte in the row key:
 `FuzzyRowFilter(List<Pair<byte[], byte[]>> fuzzyKeysData)`
 The _fuzzyKeysData_ specifies the mentioned significance of a row key byte, by taking one of two values:
 
     * 0: Indicates that the byte at the same position in the row key must match as-is
     * 1: Means that the corresponding row key byte does not matter and is always accepted
 
-For example, the row key to find any row with the format `<year_4_digits>_<month_2_digits>_<day_2_digits>` that matches any
-day of february 2021 would be `2021_02_??` and the _fuzzyKeysData_ value is `\x01\x01\x01\x01\x01\x01\x01\x01\x00\x00`. An
-advantage of this filter is that it can likely compute the next matching row key when it gets to an end of a matching one. It
-implements the _getNextCellHint()_ method to help the servers in fast-forwarding to the next range of rows that might match.
-This skips scanning blocks and speeds up the scan operations.
+For example, the row key to find any row with the format `<year_4_digits>_<month_2_digits>_<day_2_digits>` that matches any day of february 2021 would
+be `2021_02_??` and the _fuzzyKeysData_ value is `\x01\x01\x01\x01\x01\x01\x01\x01\x00\x00`. An advantage of this filter is that it can likely compute
+the next matching row key when it gets to an end of a matching one. It implements the _getNextCellHint()_ method to help the servers in
+fast-forwarding to the next range of rows that might match. This skips scanning blocks and speeds up the scan operations.
 
 ##### ColumnCountGetFilter
 
@@ -1559,8 +1514,8 @@ It skips all columns up to the number given as offset, and then includes limit c
 
 ##### ColumnPrefixFilter
 
-Similar to the previous one, but acts on columns, the constructor is `ColumnPrefixFilter(final byte[] prefix)`. All columns
-that have the given prefix are then included in the result.
+Similar to the previous one, but acts on columns, the constructor is `ColumnPrefixFilter(final byte[] prefix)`. All columns that have the given prefix
+are then included in the result.
 
 ##### MultipleColumnPrefixFilter
 
@@ -1569,15 +1524,15 @@ Extension to the ColumnPrefixFilter, allows the application to ask for a list of
 
 ##### ColumnRangeFilter
 
-This filter acts like two QualifierFilter instances working together, with one checking the lower boundary, and the other
-doing the same for the upper. The constructor is:
+This filter acts like two QualifierFilter instances working together, with one checking the lower boundary, and the other doing the same for the
+upper. The constructor is:
 `ColumnRangeFilter(final byte[] minColumn, boolean minColumnInclusive, final byte[] maxColumn, boolean maxColumnInclusive)`
 If you don't pass a min/max column, the first/last column would be used.
 
 ##### SingleColumnValueFilter
 
-Use this filter when you have exactly one column that decides if an entire row should be returned or not. You need to first
-specify the column you want to track, and then some value to check against. The constructors offered are:
+Use this filter when you have exactly one column that decides if an entire row should be returned or not. You need to first specify the column you
+want to track, and then some value to check against. The constructors offered are:
 
 ```
 // Creates a Binary Comparator instance internally on your behalf
@@ -1615,8 +1570,8 @@ The filter is asking for a list of timestamps, it will attempt to retrieve the c
 
 ##### RandomRowFilter
 
-Filter that includes random rows in the results. The constructor is `RandomRowFilter(float chance)`, where change is a number
-between 0 and 1, a negative value will exclude all rows, while a number greater than 1 will include all.
+Filter that includes random rows in the results. The constructor is `RandomRowFilter(float chance)`, where change is a number between 0 and 1, a
+negative value will exclude all rows, while a number greater than 1 will include all.
 
 #### Decorating Filters
 
@@ -1624,9 +1579,8 @@ It is sometimes useful to modify, or extend, the behavior of a filter to gain ad
 
 ##### SkipFilter
 
-This filter wraps a given filter (must implement `filterKeyValue`) and extends it to exclude an entire row, when the wrapped
-filter hints for a _Cell_ to be skipped. As soon as the underlying filter hints a cell to be omitted, the entire row is
-omitted too. Example below:
+This filter wraps a given filter (must implement `filterKeyValue`) and extends it to exclude an entire row, when the wrapped filter hints for a _Cell_
+to be skipped. As soon as the underlying filter hints a cell to be omitted, the entire row is omitted too. Example below:
 
 ```
 Filter filter = new ValueFilter(CompareFilter.CompareOp.NOT_EQUAL, new BinaryComparator(Bytes.toBytes("val-0")));
@@ -1642,8 +1596,8 @@ Filter that adds the behaviour of aborting the entire scan once a piece of infor
 
 #### FilterList
 
-_FilterList_ is used when you want to have more than a filter being applied to reduce the data returned to your application.
-The following constructors are available:
+_FilterList_ is used when you want to have more than a filter being applied to reduce the data returned to your application. The following
+constructors are available:
 
 ```
 FilterList(final List<Filter> rowFilters) // row filters are the filters passed together
@@ -1658,14 +1612,14 @@ The possible values for the _Operator_ above are:
     * MUST_PASS_ALL: A value is only included in the result when all filters agree to do so
     * MUST_PASS_ONE: As soon as a value was allowed to pass one of the filters, it is included in the overall result
 
-Adding filters, after the FilterList instance has been created, can be done with `void addFilter(Filter filter)`. You are
-free to add other FilterList instances to an existing FilterList, thus creating a hierarchy of filters, combined with the
-operators you need. Choose the List type carefully to control the execution of the filters (i.e ordered list).
+Adding filters, after the FilterList instance has been created, can be done with `void addFilter(Filter filter)`. You are free to add other FilterList
+instances to an existing FilterList, thus creating a hierarchy of filters, combined with the operators you need. Choose the List type carefully to
+control the execution of the filters (i.e ordered list).
 
 #### Custom Filters
 
-To implement your own filter, either implementing the abstract _Filter_ class, or extend the provided _FilterBase_ class.
-The _Filter_ interface has an enumeration _ReturnCode_ to be returned by the `filterKeyValue()` method, which values are:
+To implement your own filter, either implementing the abstract _Filter_ class, or extend the provided _FilterBase_ class. The _Filter_ interface has
+an enumeration _ReturnCode_ to be returned by the `filterKeyValue()` method, which values are:
 
     * INCLUDE: Include the given Cell instance in the result
     * INCLUDE_AND_NEXT_COL: Include current cell and move to next column, i.e. skip all further versions of the current 
@@ -1691,8 +1645,8 @@ Most of the provided method of _Filter_ are executed in order, the sequence will
     7 - reset(): Resets the filter for every new row the scan is iterating over. Called by the server, after a row is read
     8 - filterAllRemaining(): This method can be used to stop the scan, by returning true. Used by filters for optimization
 
-A filter using _filterRow()_ to filter out an entire row, or filter _RowCells()_ to modify the final list of included cells,
-must also override the _hasRowFilter()_ function to return true. Additional methods on _Filter_;
+A filter using _filterRow()_ to filter out an entire row, or filter _RowCells()_ to modify the final list of included cells, must also override the _
+hasRowFilter()_ function to return true. Additional methods on _Filter_;
 
     * getNextCellHint(): Invoked when the filter’s filterKeyValue() method returns ReturnCode.SEEK_NEXT_USING_HINT. 
       Use it to skip large ranges of rows—if possible
@@ -1702,8 +1656,7 @@ must also override the _hasRowFilter()_ function to return true. Additional meth
 
 ##### Custom Filter Loading
 
-To use your custom filter, package it in a JAR, and make it available in the region servers. Then there are 2 choices to load
-them:
+To use your custom filter, package it in a JAR, and make it available in the region servers. Then there are 2 choices to load them:
 
     * Static Configuration: add the JAR file to the hbase-env.sh, make sure it is loaded in the HBASE_CLASSPATH property
     * Dynamic Loading: Place the jar in the shared JAR file directory in HDFS defined in the hbase.dynamic.jars.dirproperty 
@@ -1713,12 +1666,12 @@ them:
 
 #### Filter Parser Utility
 
-_ParseFilter_ is a helper class used in all the places where filters need to be described with text and then converted to a
-Java class, like gateway servers, or the _hbase-shell_ like in:
+_ParseFilter_ is a helper class used in all the places where filters need to be described with text and then converted to a Java class, like gateway
+servers, or the _hbase-shell_ like in:
 `hbase(main):001:0> scan 'testtable', { FILTER => "SKIP PrefixFilter('row-2') AND QualifierFilter(<=,'binary:col-2')" }`
 In the above example, the "binary:col-2" parameter is divided in the value handed into the filter 'col-2', and the part
-'binary' which is the way the filter parser class allows you to specify a comparator for filters based on _CompareFilter_.
-Other allowed comparators are:
+'binary' which is the way the filter parser class allows you to specify a comparator for filters based on _CompareFilter_. Other allowed comparators
+are:
 
     * binary: BinaryComparator 
     * binaryprefix: BinaryPrefixComparator
@@ -1745,9 +1698,9 @@ The ParseFilter class only supports the filters that are shipped with HBase.
 
 #### Introduction to Counters
 
-HBase offers the _Counter_ class to deal with statistics. HBase has a mechanism to treat columns as counters instead of the
-lock, read, modify, unlock mechanism required otherwise which has as a lot of contention. The client API provides specialized
-methods to do the read-modify-write operation atomically in a single client-side call. Example on how to operate on counters:
+HBase offers the _Counter_ class to deal with statistics. HBase has a mechanism to treat columns as counters instead of the lock, read, modify, unlock
+mechanism required otherwise which has as a lot of contention. The client API provides specialized methods to do the read-modify-write operation
+atomically in a single client-side call. Example on how to operate on counters:
 
 ```
 
@@ -1757,11 +1710,11 @@ hbase(main):003:0> incr 'counters', '20150101', 'daily:hits', 1 // Increses the 
 hbase(main):04:0> get_counter 'counters', '20150101', 'daily:hits' // COUNTER VALUE = 2
 ```
 
-The `incr` operation is called with `incr '<table>', '<row>', '<column>', [<increment-value>]`. Counters require no
-initialization (set to 0) and by default are incremented by 1 if the increment value is not passed. Counters can
-programmatically be read using `Bytes.toLong()` and `Bytes.toBytes(long)` to encode the value (make sure it is a long). You
-can also read a counter with `hbase(main):005:0> get 'counters', '20150101'` but the result is given in bytes and thus not
-readable, or use `hbase(main):007:0> get_counter 'counters', '20150101', 'daily:hits'` to get it in a readable format.
+The `incr` operation is called with `incr '<table>', '<row>', '<column>', [<increment-value>]`. Counters require no initialization (set to 0) and by
+default are incremented by 1 if the increment value is not passed. Counters can programmatically be read using `Bytes.toLong()`
+and `Bytes.toBytes(long)` to encode the value (make sure it is a long). You can also read a counter
+with `hbase(main):005:0> get 'counters', '20150101'` but the result is given in bytes and thus not readable, or
+use `hbase(main):007:0> get_counter 'counters', '20150101', 'daily:hits'` to get it in a readable format.
 
 #### Single Counters
 
@@ -1786,25 +1739,24 @@ Increment(final byte[] row, final int offset, final int length)
 Increment(Increment i)
 ```
 
-You must provide a row key when instantiating an Increment. There is also the variant for larger arrays with an offset and
-length parameter to extract the row key from, and finally the clonning constructor. After instantiation, add the actual
-counters you want to increment, using these methods:
+You must provide a row key when instantiating an Increment. There is also the variant for larger arrays with an offset and length parameter to extract
+the row key from, and finally the clonning constructor. After instantiation, add the actual counters you want to increment, using these methods:
 
 ```
 Increment addColumn(byte[] family, byte[] qualifier, long amount) // Takes the column coordinates
 Increment add(Cell cell) throws IOException // reuses an existing cell, useful if you already have hold of the counter
 ```
 
-Counters as opposite of _Put_, don't have a version or timestamp, nor family. Counters takes an optional time range, which is
-passed on to the servers to restrict the internal get operation from retrieving the current counter values:
+Counters as opposite of _Put_, don't have a version or timestamp, nor family. Counters takes an optional time range, which is passed on to the servers
+to restrict the internal get operation from retrieving the current counter values:
 
 ```
 Increment setTimeRange(long minStamp, long maxStamp) throws IOException
 TimeRange getTimeRange()
 ```
 
-The above can be used to expire counters, for example, to partition them by time. Increment gets most of the methods from
-the _Mutation_ class, and add the following:
+The above can be used to expire counters, for example, to partition them by time. Increment gets most of the methods from the _Mutation_ class, and
+add the following:
 
     * Map<byte[], NavigableMap<byte[], Long>> getFamilyMapOfLongs(): Returns a list of Long instance, instead of cells, for 
       what was added to this instance so far. The list is indexed by families, and then by column qualifier
@@ -1815,11 +1767,11 @@ With the coprocessor feature (advanced feature), you can move part of the comput
 
 #### Introduction to Coprocessors
 
-A coprocessor enables you to run arbitrary code directly on each region server. Coprocessors executes code on a per-region
-basis, giving you trigger-like functionality similar to stored procedures in the RDBMS world. There is a set of implicit
-events that you can use to hook into, or you can also extend the RPC protocol to introduce your own set of calls. You need to
-create the java classes and make them available to the region servers, the same way it has been shown for custom filters.
-HBase provides classes, based on the coprocessor, which you can use to extend from when implementing your own functionality:
+A coprocessor enables you to run arbitrary code directly on each region server. Coprocessors executes code on a per-region basis, giving you
+trigger-like functionality similar to stored procedures in the RDBMS world. There is a set of implicit events that you can use to hook into, or you
+can also extend the RPC protocol to introduce your own set of calls. You need to create the java classes and make them available to the region
+servers, the same way it has been shown for custom filters. HBase provides classes, based on the coprocessor, which you can use to extend from when
+implementing your own functionality:
 
     * Endpoint: Endpoints are dynamic extensions to the RPC protocol, adding callable remote procedures
     * Observer: Comparable to triggers: callback functions are executed when certain events occur. Some implementators:
@@ -1834,26 +1786,25 @@ Coprocessors can be chained, very similar to what the Java Servlet API does with
 
 #### The Coprocessor Class Trinity
 
-All user coprocessor classes must be based on the Coprocessor interface. The interface provides two sets of types, which are
-used throughout the framework: the _PRIORITY_ constants, and _State_ enumeration. The priority of a coprocessor defines in
-what order the coprocessors are executed (system-level instances are called before the user-level coprocessors are executed).
-The possible values for this constant are shown below:
+All user coprocessor classes must be based on the Coprocessor interface. The interface provides two sets of types, which are used throughout the
+framework: the _PRIORITY_ constants, and _State_ enumeration. The priority of a coprocessor defines in what order the coprocessors are executed (
+system-level instances are called before the user-level coprocessors are executed). The possible values for this constant are shown below:
 
     * PRIORITY_HIGHEST: Highest priority, serves as an upper boundary.
     * PRIORITY_SYSTEM: High priority, used for system coprocessors (Integer.MAX_VALUE / 4).
     * PRIORITY_USER: For all user coprocessors, which are executed subsequently (Integer.MAX_VALUE / 2).
     * PRIORITY_LOWEST: Lowest possible priority, serves as a lower boundary (Integer.MAX_VALUE).
 
-Within each priority level, there is also the notion of a sequence number, which keeps track of the order in which the
-coprocessors were loaded. the Coprocessor interface offers two calls:
+Within each priority level, there is also the notion of a sequence number, which keeps track of the order in which the coprocessors were loaded. the
+Coprocessor interface offers two calls:
 
 ```
 void start(CoprocessorEnvironment env) throws IOException
 void stop(CoprocessorEnvironment env) throws IOException
 ```
 
-The provided Coprocessor Environment instance is used to retain the state across the lifespan of the coprocessor instance. A
-coprocessor instance is always contained in a provided environment, which provides the following methods:
+The provided Coprocessor Environment instance is used to retain the state across the lifespan of the coprocessor instance. A coprocessor instance is
+always contained in a provided environment, which provides the following methods:
 
 ```
 String getHBaseVersion() // Returns the HBase version
@@ -1878,15 +1829,14 @@ Each step in the process has a well known state. The life-cycle state values pro
     * STOPPED: Once stop() returns control to the framework, the state of the coprocessor is set to stopped
 
 The _CoprocessorHost_ class maintains all the coprocessor instances and their dedicated environments. The trinity of
-_Coprocessor_, _CoprocessorEnvironment_, and _CoprocessorHost_ forms the basis for the classes that implement the advanced
-functionality of HBase, provide the life-cycle support for the coprocessors, manage their state, and offer the environment
-for them to execute as expected.
+_Coprocessor_, _CoprocessorEnvironment_, and _CoprocessorHost_ forms the basis for the classes that implement the advanced functionality of HBase,
+provide the life-cycle support for the coprocessors, manage their state, and offer the environment for them to execute as expected.
 
 #### Coprocessor Loading
 
-You can either configure coprocessors to be loaded in a static way (uses the configuration files and table schemas), or load
-them dynamically while the cluster is running (uses only the table schemas). There is also a cluster-wide switch that allows
-you to disable all coprocessor loading, controlled by the following two configuration properties:
+You can either configure coprocessors to be loaded in a static way (uses the configuration files and table schemas), or load them dynamically while
+the cluster is running (uses only the table schemas). There is also a cluster-wide switch that allows you to disable all coprocessor loading,
+controlled by the following two configuration properties:
 
     * hbase.coprocessor.enabled: Defaults to true, setting this property to false stops the servers from loading any of them 
     * hbase.coprocessor.user.enabled: Defaults to true, controls the loading of user table coprocessors only
@@ -1903,8 +1853,8 @@ You can configure globally in _hbase-site.xml_ file, which coprocessors are load
 </property>
 ```
 
-The order of the classes in each configuration property is important, as it defines the execution order. All of these
-coprocessors are loaded with the system priority. The possible values for the PROCESSOR_TYPE above are:
+The order of the classes in each configuration property is important, as it defines the execution order. All of these coprocessors are loaded with the
+system priority. The possible values for the PROCESSOR_TYPE above are:
 
 | Property | Coprocessor Host | Server Type |
 | -------- | ---------------- | ----------- |
@@ -1918,9 +1868,8 @@ When a coprocessor loaded from the configuration fails to start, it will cause t
 
 ##### Loading from Table Descriptor
 
-The other option to define which coprocessors to load is the table descriptor. As this is per table, the coprocessors defined
-here are only loaded for regions of that table and only by the region servers hosting these regions. You need to add their
-definition to the table descriptor using either:
+The other option to define which coprocessors to load is the table descriptor. As this is per table, the coprocessors defined here are only loaded for
+regions of that table and only by the region servers hosting these regions. You need to add their definition to the table descriptor using either:
 
     * HTableDescriptor.setValue(): You need to create a key that must start with _COPROCESSOR_, and the value has to conform 
       to the following format: 
@@ -1951,31 +1900,29 @@ Admin admin=connection.getAdmin();
 admin.createTable(htd);
 ```
 
-Once the table is enabled and the regions are opened, the framework will first load the configuration coprocessors and then
-the ones defined in the table descriptor. For table coprocessors there is a configuration property named
-_hbase.coprocessor.abortonerror_, indicating what you want to happen if an er‐ ror occurs during the initialization of a
-coprocessor class (defaults true).
+Once the table is enabled and the regions are opened, the framework will first load the configuration coprocessors and then the ones defined in the
+table descriptor. For table coprocessors there is a configuration property named
+_hbase.coprocessor.abortonerror_, indicating what you want to happen if an er‐ ror occurs during the initialization of a coprocessor class (defaults
+true).
 
 ##### Loading from HBase Shell
 
-If you want to load coprocessors while HBase is running, you can use the table descriptor and the alter call, provided by the
-administrative API:
-`hbase> alter 'test:usertable', 'coprocessor' => 'file:///test.jar | coprocessor.SequentialIdGeneratorObserver|'`, and find
-the result with `hbase> describe 'testqauat:usertable'`. To remove a coprocessor dinamically, you can use
+If you want to load coprocessors while HBase is running, you can use the table descriptor and the alter call, provided by the administrative API:
+`hbase> alter 'test:usertable', 'coprocessor' => 'file:///test.jar | coprocessor.SequentialIdGeneratorObserver|'`, and find the result
+with `hbase> describe 'testqauat:usertable'`. To remove a coprocessor dinamically, you can use
 `hbase> alter 'test:usertable', METHOD => 'table_att_unset', NAME => 'coprocessor$1'`.
 
 #### Endpoints
 
-Endpoints solve a problem with moving data for analytical queries, that would benefit from precalculating intermediate
-results where the data resides, and just ship the results back to the client.
+Endpoints solve a problem with moving data for analytical queries, that would benefit from precalculating intermediate results where the data resides,
+and just ship the results back to the client.
 
 ##### The Service Interface
 
-Endpoints are implemented as an extension to the RPC protocol between the client and server. The payload is serialized as a
-Protobuf message and sent from client to server (and back again) using the provided coprocessor services API. In order to
-provide an endpoint to clients, a coprocessor generates a Protobuf implementation that extends the Service class. This
-service can define any methods that the coprocessor wishes to expose. Using the generated classes, you can communicate with
-the coprocessor instances via the following calls, provided by _Table_:
+Endpoints are implemented as an extension to the RPC protocol between the client and server. The payload is serialized as a Protobuf message and sent
+from client to server (and back again) using the provided coprocessor services API. In order to provide an endpoint to clients, a coprocessor
+generates a Protobuf implementation that extends the Service class. This service can define any methods that the coprocessor wishes to expose. Using
+the generated classes, you can communicate with the coprocessor instances via the following calls, provided by _Table_:
 
 ```
 CoprocessorRpcChannel coprocessorService(byte[] row)
@@ -2005,9 +1952,9 @@ CoprocessorRpcChannel coprocessorService(byte[] row)
     Batch.Callback<R> callback) throws ServiceException, Throwable
 ```
 
-Since Service instances are associated with individual regions within a table, the client RPC calls must ultimately identify
-which regions should be used in the service’s method invocations. The coprocessor RPC calls use row keys to identify which
-regions should be used for the method invocations. The call options are:
+Since Service instances are associated with individual regions within a table, the client RPC calls must ultimately identify which regions should be
+used in the service’s method invocations. The coprocessor RPC calls use row keys to identify which regions should be used for the method invocations.
+The call options are:
 
     * Single Region:This is done by calling coprocessorService() with a single row key. This returns an instance of the 
       CoprocessorRpcChannel class, which directly extends Protobuf classes. It can be used to invoke any endpoint call 
@@ -2020,9 +1967,9 @@ regions should be used for the method invocations. The call options are:
       but calls to the same region server are sent together in a single invocation. This will cut down the number of network 
       roundtrips, and is especially useful when the expected results of each endpoint invocation is very small
 
-There is two ways we can invoke a _Service_ from the _Table_ class, clients implement _Batch.Call_ to call methods of the
-actual _Service_ implementation instance, the interface’s `call()` method will be called once per selected region, pass‐ ing
-the _Service_ implementation instance for the region as a parameter. Clients can optionally implement _Batch.Callback_
+There is two ways we can invoke a _Service_ from the _Table_ class, clients implement _Batch.Call_ to call methods of the actual _Service_
+implementation instance, the interface’s `call()` method will be called once per selected region, pass‐ ing the _Service_ implementation instance for
+the region as a parameter. Clients can optionally implement _Batch.Callback_
 to be notified of the results from each region invocation as they complete. The instance’s
 `void update(byte[] region, byte[] row, R result)` method will be called with the value returned by `R call(T instance)`
 from each region.
@@ -2127,8 +2074,8 @@ Map<byte[], CountResponse> results = table.batchCoprocessorService(
     CountResponse.getDefaultInstance());
 ```
 
-Use the later form when you have many regions per server, and the returned data is very small, then the cost of the RPC
-roundtrips are noticeable. To use the _CoprocessorRpcChannel_ call:
+Use the later form when you have many regions per server, and the returned data is very small, then the cost of the RPC roundtrips are noticeable. To
+use the _CoprocessorRpcChannel_ call:
 
 ```
 CoprocessorRpcChannel channel = table.coprocessorService(Bytes.toBytes("row1"));
@@ -2137,22 +2084,21 @@ CountRequest request = CountRequest.newBuilder().build();
 CountResponse response = service.getCellCount(null, request);
 ```
 
-With the proxy reference, you can invoke any remote function defined in your derived _Service_ implementation from within
-client code, and it returns the result for the region that served the request.
+With the proxy reference, you can invoke any remote function defined in your derived _Service_ implementation from within client code, and it returns
+the result for the region that served the request.
 
 #### Observers
 
-Observers are like triggers in RDBMS, they differ to endpoints in that they are not only running in the context of a region.
-They can run in different parts of the system and react to events triggered by clients, but also implicitly by servers.
-Observers use pre-defined hooks into the server processes, so you can't add your own ones. They also act on the server side
-only, with no connection to the client. What you can do though is combine an endpoint with an observer for region-related
-functionality, exposing observer state through a custom RPC API.
+Observers are like triggers in RDBMS, they differ to endpoints in that they are not only running in the context of a region. They can run in different
+parts of the system and react to events triggered by clients, but also implicitly by servers. Observers use pre-defined hooks into the server
+processes, so you can't add your own ones. They also act on the server side only, with no connection to the client. What you can do though is combine
+an endpoint with an observer for region-related functionality, exposing observer state through a custom RPC API.
 
 ##### The ObserverContext Class
 
-For the callbacks provided by the _Observer_ classes, there is a special context handed in as the first parameter to all
-calls: an instance of the _ObserverContext_ class. It provides access to the current environment, and the ability to indicate
-to the coprocessor framework what it should do after a callback is completed. Methods provided by the context class:
+For the callbacks provided by the _Observer_ classes, there is a special context handed in as the first parameter to all calls: an instance of the _
+ObserverContext_ class. It provides access to the current environment, and the ability to indicate to the coprocessor framework what it should do
+after a callback is completed. Methods provided by the context class:
 
     * E getEnvironment(): Returns the reference to the current coprocessor environment 
     * void prepare(E env): Prepares the context with the specified environment 
@@ -2163,13 +2109,13 @@ to the coprocessor framework what it should do after a callback is completed. Me
     * static <T extends CoprocessorEnvironment> ObserverContext<T> createAndPrepare(T env, ObserverContext<T> ctx): Static 
       function to initialize a context, it will create a new instance when the provided context is null
 
-The `complete()` call influences the execution chain of the coprocessors, while the `bypass()` call stops any further default
-processing on the server within the current observer.
+The `complete()` call influences the execution chain of the coprocessors, while the `bypass()` call stops any further default processing on the server
+within the current observer.
 
 ##### The RegionObserver Class
 
-Operations in this class can be divided into two groups: region life-cycle changes and client API calls, there is a generic
-callback for many operations of both kinds:
+Operations in this class can be divided into two groups: region life-cycle changes and client API calls, there is a generic callback for many
+operations of both kinds:
 
 ```
 enum Operation {
@@ -2216,8 +2162,8 @@ postSplit(...)
 postCompleteSplit(...) / preRollBackSplit(...) / postRollBackSplit(...)
 ```
 
-Obviously, the pre calls are executed before, while the post calls are executed after the respective operation. The hooks for
-flush, compact, and split are directly linked to the matching region housekeeping functions.
+Obviously, the pre calls are executed before, while the post calls are executed after the respective operation. The hooks for flush, compact, and
+split are directly linked to the matching region housekeeping functions.
 
 *State: pending close*
 
@@ -2230,9 +2176,9 @@ postClose(..., boolean abortRequested)
 
 ###### Handling Client API Events
 
-All client API calls are explicitly sent from a client application to the region server and there are hooks for these
-operations too. For example, the `Table.put()` operation has a `prePut(...)` and a `postPut(...)` hooks which has their order
-of execution, check the documentation for more details. Example of usage:
+All client API calls are explicitly sent from a client application to the region server and there are hooks for these operations too. For example,
+the `Table.put()` operation has a `prePut(...)` and a `postPut(...)` hooks which has their order of execution, check the documentation for more
+details. Example of usage:
 
 ```
 public class ObserverStatisticsCustom  implements RegionObserver{
@@ -2250,8 +2196,8 @@ public class ObserverStatisticsCustom  implements RegionObserver{
 ###### The RegionCoprocessorEnvironment Class
 
 The environment instances provided to a coprocessor that is implementing the _RegionObserver_ interface are based on the
-_RegionCoprocessorEnvironment_ class, which in turn is implementing the _CoprocessorEnvironment_ interface. Specific methods
-provided by the _RegionCoprocessorEnvironment_ class:
+_RegionCoprocessorEnvironment_ class, which in turn is implementing the _CoprocessorEnvironment_ interface. Specific methods provided by the _
+RegionCoprocessorEnvironment_ class:
 
     * getRegion(): Returns a reference to the region the current observer is associated with
     * getRegionInfo(): Get information about the region associated with the current coprocessor instance
@@ -2272,29 +2218,29 @@ The `RegionServerServices()` call returns a _RegionServerServices_ class, which 
 
 ###### The BaseRegionObserver Class
 
-This class can be used as the basis for all your observer-type coprocessors. It has placeholders for all methods required by
-the _RegionObserver_ interface. They are all left blank, so by default nothing is done when extending this class.
+This class can be used as the basis for all your observer-type coprocessors. It has placeholders for all methods required by the _RegionObserver_
+interface. They are all left blank, so by default nothing is done when extending this class.
 
 ##### The MasterObserver Class
 
-This subclass of Coprocessor handles all possible callbacks the master server may initiate. The MasterObserver class provides
-hooks on DDL alike operations such as `pre(post)CreateTable`, `pre(post)AddColumn` and more. Check the java docs for more
-details. The methods are grouped roughly into table and region, namespace, snapshot, and server related calls.
+This subclass of Coprocessor handles all possible callbacks the master server may initiate. The MasterObserver class provides hooks on DDL alike
+operations such as `pre(post)CreateTable`, `pre(post)AddColumn` and more. Check the java docs for more details. The methods are grouped roughly into
+table and region, namespace, snapshot, and server related calls.
 
 ###### The MasterCoprocessorEnvironment Class
 
-The MasterCoprocessorEnviron meant is wrapping MasterObserver instances. It also implements the CoprocessorEnvironment
-interface, giving you access to the `getTable()` call. Specific method provided by the _MasterCoprocessorEnvironment_ class:
+The MasterCoprocessorEnviron meant is wrapping MasterObserver instances. It also implements the CoprocessorEnvironment interface, giving you access to
+the `getTable()` call. Specific method provided by the _MasterCoprocessorEnvironment_ class:
 
     * getMasterServices(): Provides access to the shared MasterServices instance
 
-The above method provides access the shared master services instance, which exposes many functions of the Master admin API
-such as table CRUD operations, namespace related methods. Check the java docs for more details.
+The above method provides access the shared master services instance, which exposes many functions of the Master admin API such as table CRUD
+operations, namespace related methods. Check the java docs for more details.
 
 ###### The BaseMasterObserver Class
 
-Either you can implement a MasterObserver on the interface directly, or you can extend the BaseMasterObserver class instead,
-which implements the interface while leaving all callback functions empty. You need to add the following to the
+Either you can implement a MasterObserver on the interface directly, or you can extend the BaseMasterObserver class instead, which implements the
+interface while leaving all callback functions empty. You need to add the following to the
 _hbase-site.xml_ file for the coprocessor to be loaded by the master process (a restart is required):
 
 ```xml
@@ -2310,13 +2256,13 @@ The environment is wrapped in an _ObserverContext_, you have the same extra flow
 
 ###### The BaseMasterAndRegionObserver Class
 
-The _BaseMasterAndRegionObserver_ class is a combination of the _BaseRegionObserver_ and the _MasterObserver_. This class is
-only useful to run on the HBase Master.
+The _BaseMasterAndRegionObserver_ class is a combination of the _BaseRegionObserver_ and the _MasterObserver_. This class is only useful to run on the
+HBase Master.
 
 ##### The RegionServerObserver Class
 
-You can run code within the region servers using the _RegionServerObserver_ class. It exposes hooks spanning many regions and
-tables. Methods of interest:
+You can run code within the region servers using the _RegionServerObserver_ class. It exposes hooks spanning many regions and tables. Methods of
+interest:
 
     * postCreateReplicationEndPoint(...): Invoked after the server has created a replication endpoint
     * preMerge(...), postMerge(...): Called when two regions are merged.
@@ -2328,8 +2274,8 @@ tables. Methods of interest:
 
 ###### The RegionServerCoprocessorEnvironment Class
 
-This class wraps the _RegionServerObserver_ instances. Implements the _CoprocessorEnvironment_ interface. Specific method
-provided by the _RegionServerCoprocessorEnvironment_ class
+This class wraps the _RegionServerObserver_ instances. Implements the _CoprocessorEnvironment_ interface. Specific method provided by the _
+RegionServerCoprocessorEnvironment_ class
 
     * getRegionServerServices(): Provides access to the shared RegionServerServices instance
 
@@ -2381,13 +2327,12 @@ long getEarliestMemstoreSeqNum(byte[] encodedRegionName)
 
 ###### The BaseWALObserver Class
 
-The _BaseWALObserver_ class implements the _WALObserver_ interface, use this class to implement your own or the interface
-directly.
+The _BaseWALObserver_ class implements the _WALObserver_ interface, use this class to implement your own or the interface directly.
 
 ##### The BulkLoadObserver Class
 
-Class used during bulk loading operations, as triggered by the HBase supplied _completebulkload_ tool, contained in the
-server JAR file. During that operation the available callbacks are triggered:
+Class used during bulk loading operations, as triggered by the HBase supplied _completebulkload_ tool, contained in the server JAR file. During that
+operation the available callbacks are triggered:
 
     * prePrepareBulkLoad(...): Invoked before the bulk load operation takes place
     * preCleanupBulkLoad(...): Called when the bulk load is complete and clean up tasks are performed
@@ -2399,21 +2344,21 @@ This observer shares the _RegionCoprocessorEnvironment_, because endpoints runs 
     * preEndpointInvocation(...), postEndpointInvocation(...): callbacks to wraps the server side execution whenever an 
       endpoint method is called from a client
 
-The client can replace the given _Message_ instance to modify the outcome of the endpoint method. The server-side call is
-aborted completely in case of failure.
+The client can replace the given _Message_ instance to modify the outcome of the endpoint method. The server-side call is aborted completely in case
+of failure.
 
 ## Chapter 5: Client API: Administrative Features<a name="Chapter5"></a>
 
 ### Schema Definition
 
-HBase exposes a data definition-like API, creating a table in HBase implicitly involves the definition of a table schema, as
-well as the schemas for all contained column families.
+HBase exposes a data definition-like API, creating a table in HBase implicitly involves the definition of a table schema, as well as the schemas for
+all contained column families.
 
 #### Namespaces
 
-Namespaces solves the problem of organizing many tables, and also allows defining abstract generic concepts like security.
-HBase creates two namespaces when it starts: default and hbase (for system generic tables). Use `list_namespace` on the HBase
-shell to see the namespaces, and `list_namespace_tables 'namespace_name'` to see the tables in the _namespace\_name_
+Namespaces solves the problem of organizing many tables, and also allows defining abstract generic concepts like security. HBase creates two
+namespaces when it starts: default and hbase (for system generic tables). Use `list_namespace` on the HBase shell to see the namespaces,
+and `list_namespace_tables 'namespace_name'` to see the tables in the _namespace\_name_
 namespace. To create a namespace programatically, you need to make use of the _NamespaceDescriptor_ class, constructors are:
 
 ```
@@ -2434,28 +2379,27 @@ String toString()
 
 #### Tables
 
-Everything stored in HBase is ultimately grouped into one or more tables. The typical things you will want to define for a
-table are column families. Constructor of the descriptor in Java:
+Everything stored in HBase is ultimately grouped into one or more tables. The typical things you will want to define for a table are column families.
+Constructor of the descriptor in Java:
 
 ```
 HTableDescriptor(final TableName name)
 HTableDescriptor(HTableDescriptor desc)
 ```
 
-A table can't be renamed, usually you create a new table with the desired name and copy the data over using the API. The name
-is used as part of the path to the actual storage files and needs to complain with filename rules (you can check the validity
-of the name with the static helper methods, for example `isLegalTableQualifierName()`). Conceptually a table is a collection
-of rows with columns in HBase, but physically they are stored in separate partitions called regions (served by exactly one
-region server).
+A table can't be renamed, usually you create a new table with the desired name and copy the data over using the API. The name is used as part of the
+path to the actual storage files and needs to complain with filename rules (you can check the validity of the name with the static helper methods, for
+example `isLegalTableQualifierName()`). Conceptually a table is a collection of rows with columns in HBase, but physically they are stored in separate
+partitions called regions (served by exactly one region server).
 
 ##### Serialization
 
-Every communication over the network is done using the Google's protobuf serialization over an RPC call. The framework
-calls `toByteArray()` on the sending side, serializing the object’s fields, while the framework is taking care of noting the
-class name and other details on their behalf. Alternatively the `convert()` method in case of the _HTableDescriptor_
-class can be used to convert the entire instance into a _Protobuf_ class. On the receiving server the framework reads the
-metadata, and will create an instance using the static `parseFrom()` of the matching class. The same is achieved using the
-matching `convert()` call, which will take a Protobuf object instead of a low-level byte array. The methods are:
+Every communication over the network is done using the Google's protobuf serialization over an RPC call. The framework calls `toByteArray()` on the
+sending side, serializing the object’s fields, while the framework is taking care of noting the class name and other details on their behalf.
+Alternatively the `convert()` method in case of the _HTableDescriptor_
+class can be used to convert the entire instance into a _Protobuf_ class. On the receiving server the framework reads the metadata, and will create an
+instance using the static `parseFrom()` of the matching class. The same is achieved using the matching `convert()` call, which will take a Protobuf
+object instead of a low-level byte array. The methods are:
 
 ```
 byte[] toByteArray()
@@ -2468,9 +2412,9 @@ These protocol text files are compiled and versioned, thus can evolve over time.
 
 ##### The RegionLocator Class
 
-A _Table_ is divided in _Region_ which are consecutive, sorted sets of rows. There are times when you need to know what
-regions a table has, what their boundaries are, and which specific region is serving a given row key. For that, there are a
-few methods provided by the _RegionLocator_ class, which you can retrieve from a _Connection_ to HBase like in
+A _Table_ is divided in _Region_ which are consecutive, sorted sets of rows. There are times when you need to know what regions a table has, what
+their boundaries are, and which specific region is serving a given row key. For that, there are a few methods provided by the _RegionLocator_ class,
+which you can retrieve from a _Connection_ to HBase like in
 `RegionLocator locator = connection.getRegionLocator(TableName.valueOf("someTableName"))`. Important methods:
 
 ```
@@ -2488,8 +2432,8 @@ _HRegionInfo_ object.
 
 ##### Server and Region Names
 
-The region name is a combination of table and region details (the start key, and region creation time), and an optional MD5
-hash of the leading prefix of the name, surrounded by dots:
+The region name is a combination of table and region details (the start key, and region creation time), and an optional MD5 hash of the leading prefix
+of the name, surrounded by dots:
 `<table name>,<region start key>,<region creation time>[.<md5hash(prefix)>.]`
 The server name is also a combination of various parts, including the host name of the machine
 `<host name>,<RPC port>,<server start time>`. The class _ServerName_ wraps the details into a convenient structure.
@@ -2587,8 +2531,8 @@ A use-case for the above might be to store application related metadata in this 
 
 ##### Configuration
 
-Allows you to override any HBase configuration property on a per table basis (merged at runtime with the default values, and
-the cluster wide configurations):
+Allows you to override any HBase configuration property on a per table basis (merged at runtime with the default values, and the cluster wide
+configurations):
 
 ```
 String getConfigurationValue(String key)
@@ -2612,11 +2556,10 @@ String toStringTableAttributes()
 
 #### Column Families
 
-There is a class called _HColumnDescriptor_ that wraps each column family’s settings into a dedicated Java class. Column
-families define shared features that apply to all columns that are created within them. Columns are addressed as a
-combination of the column family name and the column qualifier `family:qualifier`. The family name is added to the path and
-must comply with filename standards. You can omit the qualifier and specify just the column family name and HBase would
-create a column with the special empty qualifier. The Java class has many constructors available:
+There is a class called _HColumnDescriptor_ that wraps each column family’s settings into a dedicated Java class. Column families define shared
+features that apply to all columns that are created within them. Columns are addressed as a combination of the column family name and the column
+qualifier `family:qualifier`. The family name is added to the path and must comply with filename standards. You can omit the qualifier and specify
+just the column family name and HBase would create a column with the special empty qualifier. The Java class has many constructors available:
 
 ```
 HColumnDescriptor(final String familyName)
@@ -2707,8 +2650,7 @@ operation, analogous to pages in RDBMSes: `synchronized int getBlocksize()` and 
 ##### Block Cache
 
 To set if HBase should cache the blocks described above (defaults to true), use `boolean isBlockCacheEnabled()` and
-`HColumnDescriptor setBlockCacheEnabled(boolean blockCacheEnabled)`. There are other options you can use to influence how the
-block cache is used:
+`HColumnDescriptor setBlockCacheEnabled(boolean blockCacheEnabled)`. There are other options you can use to influence how the block cache is used:
 
 ```
 boolean isCacheDataOnWrite()
@@ -2733,14 +2675,14 @@ HColumnDescriptor setPrefetchBlocksOnOpen(boolean value)
 ##### Time-to-Live
 
 HBase supports predicate deletions on the number of versions kept for each value, but also on specific times. Use
-`int getTimeToLive()` and `HColumnDescriptor setTimeToLive(int timeToLive)`. The value is specified in seconds and is, by
-default, set to _HConstants.FOREVER_.
+`int getTimeToLive()` and `HColumnDescriptor setTimeToLive(int timeToLive)`. The value is specified in seconds and is, by default, set to _
+HConstants.FOREVER_.
 
 ##### In-Memory
 
 The in-memory flag defaults to false but can be read and modified with `boolean isInMemory()` and
-`HColumnDescriptor setInMemory(boolean inMemory)`. Think of it as a promise, or elevated priority, to keep them in memory as
-soon as they are loaded during a normal retrieval operation, and until discarded when the pressure on the heap is too high.
+`HColumnDescriptor setInMemory(boolean inMemory)`. Think of it as a promise, or elevated priority, to keep them in memory as soon as they are loaded
+during a normal retrieval operation, and until discarded when the pressure on the heap is too high.
 
 ##### Bloom Filter
 
@@ -2755,8 +2697,8 @@ The Bloom filter can be changed and retrieved with  `BloomType getBloomFilterTyp
 
 ##### Replication Scope
 
-Replication enables you to have multiple clusters that ship local updates across the network, so they are applied to each
-other. Change the scope with `int getScope()` and `HColumnDescriptor setScope(int scope)`. Possible values are:
+Replication enables you to have multiple clusters that ship local updates across the network, so they are applied to each other. Change the scope
+with `int getScope()` and `HColumnDescriptor setScope(int scope)`. Possible values are:
 
     * HConstants.REPLICATION_SCOPE_LOCAL: Corresponding to value 0. Default, only local scope
     * HConstants.REPLICATION_SCOPE_GLOBAL: Corresponding to value 1. Global scope, replicate family to a remove cluster
@@ -2782,8 +2724,8 @@ void remove(final byte[] key)
 
 ##### Configuration
 
-Allows you to override any HBase configuration property on a per column family basis (merged at runtime with the default
-values and the cluster wide configuration file):
+Allows you to override any HBase configuration property on a per column family basis (merged at runtime with the default values and the cluster wide
+configuration file):
 
 ```
 String getConfigurationValue(String key)
@@ -2794,8 +2736,8 @@ void removeConfiguration(final String key)
 
 ##### Miscellaneous Calls
 
-, and get hold of the list of all default values. They further allow you to convert the entire, or partial state of the
-instance into a string for further use, for example, to print the result into a log file:
+, and get hold of the list of all default values. They further allow you to convert the entire, or partial state of the instance into a string for
+further use, for example, to print the result into a log file:
 
 ```
 static Unit getUnit(String key) // Allows you to retrieve the unit for a configuration parameter
@@ -2805,8 +2747,8 @@ String toStringCustomizedValues()
 ```
 
 Example of usage is `new HColumnDescriptor("colf1").setValue("key1", "value1").setBloomFilterType(BloomType.ROWCOL);` where
-"key1" with value "value1" would appear as metadata if the above column descriptor is printed. The serialization functions
-required to send the configured instances over RPC are also present for the column descriptor:
+"key1" with value "value1" would appear as metadata if the above column descriptor is printed. The serialization functions required to send the
+configured instances over RPC are also present for the column descriptor:
 
 ```
 byte[] toByteArray()
@@ -2816,3 +2758,389 @@ ColumnFamilySchema convert()
 ```
 
 ### HBaseAdmin
+
+There is an API for administrative tasks, analog to the Data Manipulation Language (DML) in RDBMS. It provides operations to create tables with
+specific column families, check for table existence, alter table and column family definitions, drop tables, and much more.
+
+#### Basic Operations
+
+To access the administrative API, you need an instance of the Admin interface:
+
+```
+Configuration conf = HBaseConfiguration.create();
+Connection connection = ConnectionFactory.createConnection(conf);
+Admin admin = connection.getAdmin();
+TableName[] tables = admin.listTableNames();
+admin.close(); // Close the admin as soon as possible.
+connection.close();
+```
+
+#### Namespace Operations
+
+CRUD operations on namespaces:
+
+```
+void createNamespace(final NamespaceDescriptor descriptor)
+void modifyNamespace(final NamespaceDescriptor descriptor)
+void deleteNamespace(final String name)
+NamespaceDescriptor getNamespaceDescriptor(final String name)
+NamespaceDescriptor[] listNamespaceDescriptors()
+```
+
+#### Table Operations
+
+These calls help when working with the tables themselves, not the actual schemas inside:
+
+```
+void createTable(HTableDescriptor desc)
+void createTable(HTableDescriptor desc, byte[] startKey, byte[] endKey, int numRegions)
+void createTable(final HTableDescriptor desc, byte[][] splitKeys)
+void createTableAsync(final HTableDescriptor desc, final byte[][] splitKeys)
+```
+
+All of these calls must be given an instance of _HTableDescriptor_. Example of usage:
+
+```
+Configuration conf = HBaseConfiguration.create();
+Connection connection = ConnectionFactory.createConnection(conf);
+Admin admin = connection.getAdmin();
+admin.createNamespace(NamespaceDescriptor.create("test_space").build());
+HTableDescriptor desc = new HTableDescriptor(TableName.valueOf("test_space", "test_table"));
+HColumnDescriptor coldef = new HColumnDescriptor(Bytes.toBytes("colfam1"));
+desc.addFamily(coldef);
+admin.createTable(desc);
+boolean avail = admin.isTableAvailable(tableName);
+System.out.println("Table available: " + avail);
+```
+
+Most of the table-related administrative API functions are asynchronous in nature, the synchronous commands are simply a wrapper around the
+asynchronous ones. There are several versions of the method to list tables:
+
+```
+HTableDescriptor[] listTables()
+HTableDescriptor[] listTables(Pattern pattern)
+HTableDescriptor[] listTables(String regex)
+HTableDescriptor[] listTables(Pattern pattern, boolean includeSy‐ sTables)
+HTableDescriptor[] listTables(String regex, boolean includeSysTa‐ bles)
+HTableDescriptor[] listTableDescriptorsByNamespace(final String name)
+HTableDescriptor getTableDescriptor(final TableName tableName) 
+HTableDescriptor[] getTableDescriptorsByTableName(List<TableName> tableNames)
+HTableDescriptor[] getTableDescriptors(List<String> names) boolean tableExists(final TableName tableName)
+```
+
+It is also possible to list the table names:
+
+```
+TableName[] listTableNames()
+TableName[] listTableNames(Pattern pattern)
+TableName[] listTableNames(String regex)
+TableName[] listTableNames(final Pattern pattern, final boolean includeSysTables)
+TableName[] listTableNames(final String regex, final boolean includeSysTables)
+TableName[] listTableNamesByNamespace(final String name)
+```
+
+And also retrieve information about the table regions:
+
+```
+List<HRegionInfo> getTableRegions(final byte[] tableName)
+List<HRegionInfo> getTableRegions(final TableName tableName)
+```
+
+To delete a table use (table is removed from the servers, and all data deleted):
+
+```
+void deleteTable(final TableName tableName)
+HTableDescriptor[] deleteTables(String regex) // returns the info of the tables that were not deleted. Empty if successful
+HTableDescriptor[] deleteTables(Pattern pattern) // returns the info of the tables that were not deleted. Empty if successful
+```
+
+The is another related call, which does not delete the table itself, but removes all data from it:
+`public void truncateTable(final TableName tableName, final boolean preserveSplits)`
+
+Before you can delete a table, you need to ensure that it is first disabled, using the following methods:
+
+```
+void disableTable(final TableName tableName)
+HTableDescriptor[] disableTables(String regex)
+HTableDescriptor[] disableTables(Pattern pattern)
+void disableTableAsync(final TableName tableName)
+```
+
+Disabling the table first tells every region server to flush any uncommitted changes to disk, close all the regions, and update the system tables to
+reflect that no region of this table is deployed to any servers.
+
+You can enable a table again using:
+
+```
+void enableTable(final TableName tableName)
+HTableDescriptor[] enableTables(String regex)
+HTableDescriptor[] enableTables(Pattern pattern)
+void enableTableAsync(final TableName tableName)
+```
+
+Finally, there is a set of calls to check on the status of a table:
+
+```
+boolean isTableEnabled(TableName tableName)
+boolean isTableDisabled(TableName tableName)
+boolean isTableAvailable(TableName tableName)
+boolean isTableAvailable(TableName tableName, byte[][] splitKeys)
+```
+
+Use the following method to alter a table structure (the table must be dissabled):
+
+```
+void modifyTable(final TableName tableName, final HTableDescriptor htd) // asynchronous call
+Pair<Integer, Integer> getAlterStatus(final TableName tableName)
+Pair<Integer, Integer> getAlterStatus(final byte[] tableName)
+```
+
+the numbers returned by `getAlterStatus()` call are the number of regions that still need to be updated and the total number of regions affected by
+the change respectively.
+
+#### Schema Operations
+
+The _Admin_ class has also the following methods to deal with columns (asynchronous):
+
+```
+void addColumn(final TableName tableName, final HColumnDescriptor column)
+void deleteColumn(final TableName tableName, final byte[] colum‐ nName)
+void modifyColumn(final TableName tableName, final HColumnDescriptor descriptor)
+```
+
+#### Cluster Operations
+
+The _Admin_ class also has operations on the cluster, split into region, table, and server operations.
+
+##### Region Operations
+
+These operations are for advanced users, handle with care:
+
+```
+// returns all regions hosted by a given server
+List<HRegionInfo> getOnlineRegions(final ServerName sn)
+
+// close regions previously deployed on regions servers. Any enabled table has all regions en‐ abled, so you could 
+// actively close and undeploy one of those regions.
+void closeRegion(final String regionname, final String serverName) 
+void closeRegion(final byte[] regionname, final String serverName) 
+boolean closeRegionWithEncodedRegionName(final String encodedRegionName, final String serverName)
+void closeRegion(final ServerName sn, final HRegionInfohri)
+
+// A client application can use these synchronous methods to flush updates to a region records to disk, before they are 
+// implicitly written by hitting the memstore flush size
+void flush(final TableName tableName)
+void flushRegion(final byte[] regionName)
+
+// As storage files accumulate the system is compacting them in the background to keep the number of files low. With these 
+// calls you can explicitly trigger the same operation for an entire server, a table, or one specific region.
+void compact(final TableName tableName)
+void compact(final TableName tableName, final byte[] columnFamily)
+void compactRegion(final byte[] regionName)
+void compactRegion(final byte[] regionName, final byte[] columnFamily)
+void compactRegionServer(final ServerName sn, boolean major)
+
+// Continuation from the above, available to query the status of a running compaction process
+CompactionState getCompactionState(final TableName tableName)
+CompactionState getCompactionStateForRegion(final byte[] regionName)
+
+// same as the compact() calls, but they queue the col‐ umn family, region, or table, for a major compaction instead.
+void majorCompact(TableName tableName)
+void majorCompact(TableName tableName, final byte[] columnFamily)
+void majorCompactRegion(final byte[] regionName)
+void majorCompactRegion(final byte[] regionName, final byte[] columnFamily)
+
+// to split a specific region, or table. In case of the table-scoped call, the system iterates over all regions of that table 
+// and implicitly invokes the split command on each of them.
+void split(final TableName tableName)
+void split(final TableName tableName, final byte[] splitPoint) // to split the given region at the provided row key.
+void splitRegion(final byte[] regionName)
+void splitRegion(final byte[] regionName, final byte[] splitPoint)
+
+// to merge previously split regions, requires adjacent regions to be specified
+void mergeRegions(final byte[] encodedNameOfRegionA, final byte[] encodedNameOfRegionB, final boolean forcible)
+
+// When a region needs to be deployed or undeployed from the region servers
+void assign(final byte[] regionName) // assign a region, based on the overall assignment plan
+void unassign(final byte[] regionName, final booleanforce)
+void offline(final byte[] regionName) // to leave a region unassigned after the call
+
+// to actively control which server is hosting what regions. The destServerName parameter can be set to null to pick a new 
+// server at random, otherwise, it must be a valid server name, running a region server process
+void move(final byte[] encodedRegionName, final byte[] destServerName)
+
+// When the balancer is enabled, a call to balancer() will start the process of moving regions from the servers, with 
+// more deployed to those with less deployed regions.
+boolean setBalancerRunning(final boolean on, final boolean synchronous) // to switch the region balancer on or off
+boolean balancer() // to get the balancer
+```
+
+##### Table Operations: Snapshots
+
+These calls are low-level tasks that can be invoked from the administrative API and be applied to the entire given table. The primary purpose is to
+archive the current state of a table, referred to as snapshots.
+
+```
+void snapshot(final String snapshotName, final TableName tableName)
+void snapshot(final byte[] snapshotName, final TableName tableName)
+void snapshot(final String snapshotName, final TableName tableName, Type type)
+void snapshot(SnapshotDescription snapshot)
+SnapshotResponse takeSnapshotAsync(SnapshotDescription snapshot)
+boolean isSnapshotFinished(final SnapshotDescription snapshot)
+```
+
+You need to supply a unique name for each snapshot. The _Type_ class passed in the third call can have the following values:
+
+    * FLUSH (Enabled): This is the default and is used to force a flush operation on online tables before the snapshot is taken 
+    * SKIPFLUSH (Enabled): Use this option to immediately snapshot all persisted files of a table without waiting for a flush
+    * DISABLED (Disabled): This option is not for normal use, but might be returned if a snapshot was created on a disabled table
+
+Once you have created one or more snapshot, you are able to retrieve a list of the available snapshots using the following methods:
+
+```
+List<SnapshotDescription> listSnapshots()
+List<SnapshotDescription> listSnapshots(String regex)
+List<SnapshotDescription> listSnapshots(Pattern pattern)
+```
+
+When it is time to restore a previously taken snapshot, you need to call one of these methods:
+
+```
+void restoreSnapshot(final byte[] snapshotName)
+void restoreSnapshot(final String snapshotName)
+
+// if takeFailSafeSnapshot is set to true, hbase first perform a snapshot of the specified table, before restoring the saved one
+void restoreSnapshot(final byte[] snapshotName, final boolean takeFailSafeSnapshot) 
+void restoreSnapshot(final String snapshotName, boolean takeFailSafeSnapshot)
+```
+
+Before you can run a restore operation on a table though, you need to disable it first. The restore operation is essentially a drop operation,
+followed by a recreation of the table with the archived data. You can also clone a snapshot, which means you are recreating the table under a new
+name:
+
+```
+void cloneSnapshot(final byte[] snapshotName, final TableName tableName)
+void cloneSnapshot(final String snapshotName, final TableName tableName)
+```
+
+Removing a snapshot is accomplished using these calls (handle with care!):
+
+```
+void deleteSnapshot(final byte[] snapshotName)
+void deleteSnapshot(final String snapshotName)
+void deleteSnapshots(final String regex)
+void deleteSnapshots(final Pattern pattern)
+```
+
+Some parting notes on snapshots:
+
+    * You can only have one snapshot or restore in progress per table
+    * You can increase the snapshot concurrency from the default of 1 by setting a higher value with the hbase.snapshot.master.threads property
+    * Turning off snapshot support for the entire cluster is handled by hbase.snapshot.enabled default to true
+
+##### Server Operations
+
+Operations on cluster status:
+
+```
+// To retrieve an instance of the ClusterStatus class, containing detailed information about the cluster status
+ClusterStatus getClusterStatus()
+// gives access to the client configuration what was loaded, or set later on, from disk
+Configuration getConfiguration()
+
+// These calls allow the application to access the current configuration, and to reload that configuration from disk 
+void updateConfiguration(ServerName server) // for a specific server
+void updateConfiguration()// for all servers
+
+// Returns the current web-UI port of the HBase Master
+int getMasterInfoPort()
+
+// Returns the value set with the hbase.client.operation.timeout property
+int getOperationTimeout()
+
+// Instructs the named server to close the current WAL file and create a new one.
+void rollWALWriter(ServerName serverName)
+
+// The HBase Master process runs a background housekeeping task, the catalog janitor, which is responsible to clean up region operation remnants
+boolean enableCatalogJanitor(boolean enable)
+int runCatalogScan()
+boolean isCatalogJanitorEnabled()
+
+// Provides access to the list of coprocessors loaded into the master process, and the RPC channel for the active master, when not providing any 
+// parameter, or a given region server.
+String[] getMasterCoprocessors()
+CoprocessorRpcChannel coprocessorService()
+CoprocessorRpcChannel coprocessorService(ServerName sn)
+
+// HBase has a server-side procedure framework, which is used by, for example, the master to distribute an operation across many or all region servers
+void execProcedure(String signature, String instance, Map<String, String> props)
+byte[] execProcedureWithRet(String signature, String instance, Map<String, String> props)
+boolean isProcedureFinished(String signature, String instance, Map<String, String> props)
+
+// These calls either shut down the entire cluster, stop the master server, or stop a particular region server only
+void shutdown()
+void stopMaster()
+void stopRegionServer(final String hostnamePort)
+```
+
+#### Cluster Status Information
+
+When you query the cluster status using the `Admin.getClusterStatus()` call, you will be given a _ClusterStatus_ instance, containing all the
+information the master server has about the current state of the cluster. Check the javadocs for more information about the methods of the
+_ClusterStatus_ class.
+
+### ReplicationAdmin
+
+HBase provides a separate administrative API for cluster-to-cluster replication purposes. The constructor is
+`ReplicationAdmin(Configuration conf) throws IOException`. Once you have created the instance, you can use the following methods to set up the
+replication between the current and remote clusters:
+
+```
+void addPeer(String id, String clusterKey) throws ReplicationException
+void addPeer(String id, String clusterKey, String tableCFs)
+void addPeer(String id, ReplicationPeerConfig peerConfig, Map<TableName, ? extends Collection<String>> tableCfs) throws ReplicationException
+void removePeer(String id) throws ReplicationException
+void enablePeer(String id) throws ReplicationException // Starts the replication process
+void disablePeer(String id) throws ReplicationException
+boolean getPeerState(String id) throws ReplicationException
+```
+
+A peer is a remote cluster as far as the current cluster is concerned. It is referenced by a unique ID, which is an arbitrary number, and the cluster
+key. The latter comprises the following details from the peer’s configuration (On the _hbase.zookeeper.quorum_ property the hostnames are separated by 
+coma): `<hbase.zookeeper.quorum>:<hbase.zookeeper.property.clientPort>:<zookeeper.znode.parent>`
+
+Once the relationship between a cluster and its peer are set, they can be queried in various ways:
+
+```
+int getPeersCount()
+Map<String, String> listPeers()
+Map<String, ReplicationPeerConfig> listPeerConfigs()
+ReplicationPeerConfig getPeerConfig(String id)  throws ReplicationException
+List<HashMap<String, String>> listReplicated() throws IOException
+```
+
+The following are methods to define the per peer setting that defines which of the replicated families is sent to which peer:
+
+```
+String getPeerTableCFs(String id) throws ReplicationException
+
+// To set the desired column families as you establish the relationship
+void setPeerTableCFs(String id, String tableCFs) throws ReplicationException
+void setPeerTableCFs(String id, Map<TableName, ? extends Collection<String>> tableCfs)
+
+// To add new column families to replicate without replacing the existing list
+void appendPeerTableCFs(String id, String tableCfs) throws ReplicationException
+void appendPeerTableCFs(String id, Map<TableName, ? extends Collection<String>> tableCfs)
+
+void removePeerTableCFs(String id, String tableCf) throws ReplicationException
+void removePeerTableCFs(String id, Map<TableName, ? extends Collection<String>> tableCfs)
+
+// Used internally to parse string representations of tables and their column families into appropriate Java objects, suitable for further processing
+static Map<TableName, List<String>> parseTableCFsFromConfig(String tableCFsConfig)
+```
+
+Finally, when done with the replication related administrative API, you should—as with any other API class—close the instance to free any 
+resources it may have accumulated using the method `void close() throws IOException`.
+
+
+## Chapter 6: Available Clients<a name="Chapter6"></a>
