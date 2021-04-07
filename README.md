@@ -1902,7 +1902,7 @@ admin.createTable(htd);
 
 Once the table is enabled and the regions are opened, the framework will first load the configuration coprocessors and then the ones defined in the
 table descriptor. For table coprocessors there is a configuration property named
-_hbase.coprocessor.abortonerror_, indicating what you want to happen if an er‐ ror occurs during the initialization of a coprocessor class (defaults
+_hbase.coprocessor.abortonerror_, indicating what you want to happen if an error occurs during the initialization of a coprocessor class (defaults
 true).
 
 ##### Loading from HBase Shell
@@ -1968,7 +1968,7 @@ The call options are:
       roundtrips, and is especially useful when the expected results of each endpoint invocation is very small
 
 There is two ways we can invoke a _Service_ from the _Table_ class, clients implement _Batch.Call_ to call methods of the actual _Service_
-implementation instance, the interface’s `call()` method will be called once per selected region, pass‐ ing the _Service_ implementation instance for
+implementation instance, the interface’s `call()` method will be called once per selected region, passing the _Service_ implementation instance for
 the region as a parameter. Clients can optionally implement _Batch.Callback_
 to be notified of the results from each region invocation as they complete. The instance’s
 `void update(byte[] region, byte[] row, R result)` method will be called with the value returned by `R call(T instance)`
@@ -2498,7 +2498,7 @@ Tables are writable by default, but can be changed through `boolean isReadOnly()
 
 ##### Coprocessors
 
-Methods to add, check, list, and re‐ move coprocessors from the current table descriptor instance:
+Methods to add, check, list, and remove coprocessors from the current table descriptor instance:
 
 ```
 HTableDescriptor addCoprocessor(String className) throws IOException
@@ -2820,8 +2820,8 @@ asynchronous ones. There are several versions of the method to list tables:
 HTableDescriptor[] listTables()
 HTableDescriptor[] listTables(Pattern pattern)
 HTableDescriptor[] listTables(String regex)
-HTableDescriptor[] listTables(Pattern pattern, boolean includeSy‐ sTables)
-HTableDescriptor[] listTables(String regex, boolean includeSysTa‐ bles)
+HTableDescriptor[] listTables(Pattern pattern, boolean includeSysTables)
+HTableDescriptor[] listTables(String regex, boolean includeSysTables)
 HTableDescriptor[] listTableDescriptorsByNamespace(final String name)
 HTableDescriptor getTableDescriptor(final TableName tableName) 
 HTableDescriptor[] getTableDescriptorsByTableName(List<TableName> tableNames)
@@ -2904,7 +2904,7 @@ The _Admin_ class has also the following methods to deal with columns (asynchron
 
 ```
 void addColumn(final TableName tableName, final HColumnDescriptor column)
-void deleteColumn(final TableName tableName, final byte[] colum‐ nName)
+void deleteColumn(final TableName tableName, final byte[] columnName)
 void modifyColumn(final TableName tableName, final HColumnDescriptor descriptor)
 ```
 
@@ -2920,7 +2920,7 @@ These operations are for advanced users, handle with care:
 // returns all regions hosted by a given server
 List<HRegionInfo> getOnlineRegions(final ServerName sn)
 
-// close regions previously deployed on regions servers. Any enabled table has all regions en‐ abled, so you could 
+// close regions previously deployed on regions servers. Any enabled table has all regions enabled, so you could 
 // actively close and undeploy one of those regions.
 void closeRegion(final String regionname, final String serverName) 
 void closeRegion(final byte[] regionname, final String serverName) 
@@ -2944,7 +2944,7 @@ void compactRegionServer(final ServerName sn, boolean major)
 CompactionState getCompactionState(final TableName tableName)
 CompactionState getCompactionStateForRegion(final byte[] regionName)
 
-// same as the compact() calls, but they queue the col‐ umn family, region, or table, for a major compaction instead.
+// same as the compact() calls, but they queue the column family, region, or table, for a major compaction instead.
 void majorCompact(TableName tableName)
 void majorCompact(TableName tableName, final byte[] columnFamily)
 void majorCompactRegion(final byte[] regionName)
@@ -3106,7 +3106,7 @@ boolean getPeerState(String id) throws ReplicationException
 ```
 
 A peer is a remote cluster as far as the current cluster is concerned. It is referenced by a unique ID, which is an arbitrary number, and the cluster
-key. The latter comprises the following details from the peer’s configuration (On the _hbase.zookeeper.quorum_ property the hostnames are separated by 
+key. The latter comprises the following details from the peer’s configuration (On the _hbase.zookeeper.quorum_ property the hostnames are separated by
 coma): `<hbase.zookeeper.quorum>:<hbase.zookeeper.property.clientPort>:<zookeeper.znode.parent>`
 
 Once the relationship between a cluster and its peer are set, they can be queried in various ways:
@@ -3139,8 +3139,338 @@ void removePeerTableCFs(String id, Map<TableName, ? extends Collection<String>> 
 static Map<TableName, List<String>> parseTableCFsFromConfig(String tableCFsConfig)
 ```
 
-Finally, when done with the replication related administrative API, you should—as with any other API class—close the instance to free any 
-resources it may have accumulated using the method `void close() throws IOException`.
-
+Finally, when done with the replication related administrative API, you should—as with any other API class—close the instance to free any resources it
+may have accumulated using the method `void close() throws IOException`.
 
 ## Chapter 6: Available Clients<a name="Chapter6"></a>
+
+### Introduction
+
+You either use the client API directly, or access it through some sort of proxy that translates your request into an API call. These proxies wrap the
+native Java API into other protocol APIs so that clients can be written in any language the external API provides.
+
+#### Gateways
+
+An example of a gateway is a REST service to translate HTTP request into HBase ones. But it is verbose, so companies with very large server farms,
+extensive bandwidth usage, and many disjoint services felt the need to reduce the overhead and implemented their own RPC layers. Other options are
+protocol buffers (Google) or Thrift (Facebook). Protobuf has no RPC stack of its own; rather, it generates the RPC definitions, which have to be used
+with other RPC libraries subsequently. HBase ships with auxiliary servers for REST and Thrift. Internally, these servers use the common _Table_ or
+_BufferedMutator_ based client API to access the tables. The argument about when to use REST/Thrift is shown below:
+
+    * REST: Fits nicely into setups with reverse proxies and other caching technologies
+    * Thrift/Avro: When you need the best performance in terms of throughput
+
+### Gateway Clients
+
+#### REST
+
+HBase ships with a REST server, which supports the complete client and administrative API.
+
+##### Operation
+
+For REST operations, you need to start the appropriate gateway server: `hbase rest start` (use `hbase rest` to get the command help). This will start
+the service in attached mode, to run it as a background process use `bin/hbase-daemon.sh start rest` instead (use `bin/hbase-daemon.sh stop rest` to
+stop the service). The config properties pertaining to the rest service starts with _hbase.rest.\*_ in the config file.
+
+##### Supported Formats
+
+Using the HTTP Content-Type and Accept headers, you can switch between different formats being sent or returned to the caller. Some of the available
+formats include _text/plain_, _text/xml_ (considered the default format, returns the column name and the actual value encoded in Base64),
+_application/json_ (encoded values in base64 as well, the name of the cell data field is '$'), _application/x-protobuf_ (You need a Protocol Buffer
+decoder to actually access the data in a structured way) or _application/octet-stream_ (raw binary form).
+
+##### REST Java Client
+
+The REST server also comes with a comprehensive Java client API. It is located in the _org.apache.hadoop.hbase.rest.client_ package. Example:
+
+```
+Cluster cluster=new Cluster();
+cluster.add("localhost",8080);
+Client client=new Client(cluster);
+// Operate like with a Table instance
+RemoteHTable table=new RemoteHTable(client,"testtable"); 
+```
+
+The RemoteHTable is a convenient way to talk to a number of REST servers, while being able to use the normal Java client API classes, such as _Get_ or
+_Scan_.
+
+#### Thrift
+
+Apache Thrift provides schema compilers to different languages. Once you have compiled a schema, you can exchange messages transparently between
+systems implemented in one or more of those languages. An effort was started to change this by implementing a new version of the Thrift gateway
+server, named Thrift2 after HBase version 0.90.
+
+##### Thrift Operations
+
+Before you can access HBase using Thrift, though, you also have to start the supplied ThriftServer with `bin/hbase thrift start` (execute
+`bin/hbase thrift` to get possible options to the command), or else `bin/hbase-daemon.sh start|stop thrift` if you run it as a backend process. There
+is a UI available at port 9095 by default (stateless server), and different configuration values are available from _hbase.thrift.\*_ and
+_hbase.regionserver.thrift.\*_.
+
+#### SQL over NoSQL
+
+There is a rise in frameworks providing RDBMS capabilities on top of a No-SQL systems. Some notable projects are:
+
+    * Phoenix: The most native integration. The framework uses many advanced features to optimize generic SQL queries executed against HBase tables,
+    including coprocessors for secondary indexes, and filtering
+    * Trafodion: A system that combines existing database technology with HBase as the storage layer
+    * Impala: Primary built to perform interactive queries against data stored in HDFS, it has the ability to directly access HBase tables too
+
+### Framework Clients
+
+Frameworks offers a higher level of abstraction, usually in the form of a domain specific language (DSL).
+
+#### Hive
+
+Hive offers an SQL-like query language (HiveQL), which allows you to query the semistructured data stored in Hadoop. The data is parsed at job
+execution time and Hive employs a storage handler abstraction layer that allows for data not to just reside in HDFS, but other data sources (like
+HBase after version 0.6.0) as well. A storage handler transparently makes arbitrarily stored information available to the HiveQL-based user queries.
+Hive needs to have the HBase dependencies available for this to work.
+
+##### Mapping Managed Tables
+
+To start using HBase tables in hive, first create a table in Hive, backed with an HBase table:
+
+```
+CREATE TABLE hbase_table_1(key int, value string) \
+    STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler' \ 
+    WITH SERDEPROPERTIES ("hbase.columns.mapping" = ":key,cf1:val") \ 
+    TBLPROPERTIES ("hbase.table.name" = "hbase_table_1");
+```
+
+The _hbase.columns.mapping_ property has a special feature, which is mapping the column with the name ":key" to the HBase row key. You can place this
+special column to perform row key mapping anywhere in your definition. Here it is placed as the first column, thus mapping the values in the key
+column of the Hive table to be the row key in the HBase table.
+
+##### Mapping Existing Tables
+
+You can also map an existing HBase table into Hive, or even map the table into multiple Hive tables, which uses _Scan_ internally and is useful when
+you have a sparsely set family of columns and allows you to fine-tune the tables properties.
+
+```
+CREATE TABLE dwitems(key int, value string) \
+    STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler' \ 
+    WITH SERDEPROPERTIES ("hbase.columns.mapping" = ":key,cf1:val") \ 
+    TBLPROPERTIES ("hbase.table.name" = "warehouse:items");
+```
+
+It is better to create initially the table in HBase and set all desired properties, then create the table in Hive using `CREATE EXTERNAL TABLE...`.
+Remember that external tables are not deleted when the table is dropped from inside Hive.
+
+##### Advanced Column Mapping Features
+
+You have the option to map any HBase column directly to a Hive column, or you can map an entire column family to a Hive MAP type. HBase only stores
+`byte[]` arrays, so Hive is simply converting every column value to String, and serializes it from there.
+
+##### Mapping Existing Table Snapshots
+
+You can also map HBase snapshots to Hive tables, you have to set the table name just before you issue the Hive query, using the
+_hive.hbase.snapshot.name_ property interactively in the Hive shell. Before we can use the snapshot, we have to switch to the HBase super user (the
+one owning the HBase files in HDFS, here hadoop) to be able to read the snapshot at all:
+
+```
+$ export HADOOP_USER_NAME=hadoop 
+$ hive
+
+hive> SET hive.hbase.snapshot.name=snap1;
+hive> SELECT COUNT(*) FROM originalTable; # The name of the table is the same than the one set by the hbase.table.name property
+```
+
+#### Pig
+
+Pig is an imperative language with its own high-level query language, called Pig Latin. Version 0.7.0 of Pig introduced the `LoadFunc/StoreFunc`
+classes and functionality, which allows you to load and store data from sources other than the usual HDFS. You can map table columns as Pig tuples,
+which optionally include the row key as the first field for read operations. For writes, the first field is always used as the row key. An example of
+data load is shown below (grunt is Pig's shell):
+
+```
+grunt> raw = LOAD 'tutorial/data/excite-small.log' USING PigStorage('\t') AS (user, time, query);
+T = FOREACH raw GENERATE CONCAT(CONCAT(user, '\u0000'), time), query;
+grunt> STORE T INTO 'excite' USING org.apache.pig.backend.hadoop.hbase.HBaseStorage('colfam1:query');
+```
+
+And then to load the data:
+
+```
+grunt> R = LOAD 'excite' USING \ org.apache.pig.backend.hadoop.hbase.HBaseStorage('colfam1:query', '-loadKey') AS (key: chararray, query: chararray);
+```
+
+Pig has some limitations, it does not support HBase cell versioning and the row key must be the first field and cannot be placed anywhere else.
+
+#### Cascading
+
+Cascading is an alternative API to MapReduce, the model used is similar to a real-world pipe assembly (ETL with pipe, stream and sink). Cascading
+(version 1.0.1) has support for reading and writing data to and from a HBase cluster, check docs for more details.
+
+#### Other Clients
+
+There are other client libraries that allow you to access a HBase cluster:
+
+    * Clojure: The HBase-Runner offers support for HBase from the functional programming language Clojure
+    * JRuby: The HBase Shell is an example of using a JVM-based language to access the Java-based API. It comes with the full source code
+    * HBql: HBql adds an SQL-like syntax on top of HBase, while adding the extensions needed where HBase has unique features
+    * HBase-DSL: This project gives you dedicated classes that help when formulating queries against a HBase cluster
+    * JPA/JPO: You can use, for example, DataNucleus to put a JPA/JPO access layer on top of HBase
+    * PyHBase: The PyHBase project offers a HBase client through the Avro gateway server
+    * AsyncHBase: Asynchronous, nonblocking, and thread-safe client to access HBase. Uses RPC protocol to talk directly to the various servers
+
+### Shell
+
+#### Basics
+
+The shell is based on JRuby (JVM implementation of Ruby), start the shell with `$HBASE_HOME/bin/hbase shell`, and request help once it has started
+with the command `help` or more specific `help <command>`. To activate/inactivate the debug logs on the shell type `debug`, and check the status of
+this flag with `debug?`. Exit the shell with `exit`.
+
+#### Commands
+
+Few guidelines when entering commands:
+
+    * Quote Names: Commands that require a table or column name expect the name to be quoted in either single or double quotes
+    * Quote Values: Binary values are supported using a hexadecimal—or octal—representation single/double quote them or they will be consider strings
+    * Comma Delimiters for Parameters: Separate command parameters using commas
+    * Ruby Hashes for Properties: Use the notation {'key1' => 'value1', ...} to hand key/value properties map (Usually keys are predefined 
+    constants such as NAME, VERSIONS, or COMPRESSION, and do not need to be quoted)
+
+The get command has an optional parameter that you can use to restrict the printed values by length. i.e
+`hbase(main)=>get 'testtable', 'rowlong', MAXLENGTH => 60`. The majority of commands have a direct match with a method provided by either the client
+or administrative API.
+
+    * general: Comprises general commands that do not fit into any other category, for example status
+    * configuration: Some configuration properties can be changed at runtime, and reloaded with these commands
+    * ddl: Contains all commands for data-definition tasks, such as creating a table
+    * namespace: Similar to the former, but for namespace related operations 
+    * dml: Has all the data-maipulation commands, which are used to insert or delete data, for example
+    * snapshots: Tables can be saved using snapshots, which are created, deleted, restored, etc. using commands from this group
+    * tools: There are tools supplied with the shell that can help run expert-level, cluster wide operations
+    * replication: All replication related commands are within this group, for example, adding a peer cluster
+    * security: The contained commands handle security related tasks 
+    * visibility labels: These commands handle cell label related functionality, such as adding or listing labels
+
+You can use any of the group names to get detailed help using the same `help '<groupname>' syntax`.
+
+##### General Commands
+
+    * status: Returns various levels of information contained in the ClusterStatus class, i.e: `status simple|summary|detailed` 
+    * version: Returns the current version, repository revision, and compilation date of your HBase cluster
+    * table_help: Prints a help text explaining the usage of table references in the Ruby shell.
+    * whoami: Shows the current OS user and group membership known to HBase about the shell user.
+    * update_config: Update the configuration for a particular server. The name must be given as a valid server name
+    * update_all_config:Updates all region servers
+
+##### Namespace and Data Definition Commands
+
+    * drop_namespace: Removes the namespace, which must be empty, that is, it must not contain any tables
+    * alter_namespace: Changes the namespace details by altering its configuration properties
+    * describe_namespace: Prints the details of an existing namespace
+    * list_namespace: Lists all known namespaces
+    * list_namespace_tables: Lists all tables contained in the given namespace
+    * alter: Modifies an existing table schema using modifyTable()
+    * alter_async: Same as above, but returns immediately without waiting for the changes to take effect
+    * alter_status: Can be used to query how many regions have the changes applied to them. Use this after making asynchronous alterations
+    * create: Creates a new table
+    * describe: Prints the HTableDescriptor
+    * disable: Disables a table
+    * disable_all: Uses a regular expression to disable all matching tables in a single command.
+    * drop: Drops a table
+    * drop_all: Drops all matching tables. The parameter is a regular expression.
+    * enable: Enables a table
+    * enable_all: Using a regular expression to enable all matching tables.
+    * exists: Checks if a table exists
+    * is_disabled: Checks if a table is disabled
+    * is_enabled: Checks if a table is enabled
+    * list: Returns a list of all user tables
+    * show_filters: Lists all known filter classes
+    * get_table: Returns a table reference that can used in scripting
+
+The commands ending in _all accept a regular expression that ap‐ plies the command to all matching tables.
+
+##### Data Manipulation Commands
+
+    * put: Stores a cell
+    * get delete: Retrieves a cell
+    * deleteall: Similar to delete but does not require a column
+    * append: Allows to append data to cells
+    * incr: Increments a counter
+    * get_counter: Retrieves a counter value. Same as the get command but converts the raw counter value into a readable number
+    * scan: Scans a range of rows
+    * count: Counts the rows in a table, uses a Scan internally
+    * truncate: Truncates a table, which is the same as executing the disable and drop commands, followed by a create, using the same schema
+    * truncate_preserve: Same as the previous command, but retains the regions with their start and end keys
+
+##### Snapshot Commands
+
+    * snapshot: Creates a snapshot. Use the SKIP_FLUSH => true option to not flush the table before the snapshot 
+    * clone_snapshot: Clones an existing snapshot into a new table 
+    * restore_snapshot: Restores a snapshot under the same table name as it was created 
+    * delete_snapshot: Deletes a specific snapshot. The given name must match the name of a previously created snapshot 
+    * delete_all_snapshot: Deletes all snapshots using a regular expression to match any number of names 
+    * list_snapshots: Lists all snapshots that have been created so far 
+
+##### Tool Commands
+
+Many of the following commands are very low-level and may apply disruptive actions.
+
+    * assign: Assigns a region to a server
+    * balance_switch: Toggles the balancer switch
+    * balancer: Starts the balancer
+    * close_region: Closes a region
+    * compact: Starts the asynchronous compaction of a region or table
+    * compact_rs: Compact all regions of a given region server. The optional boolean flag decided between major and minor compactions.
+    * flush: Starts the asynchronous flush of a region or table
+    * major_compact: Starts the asynchronous major compaction of a region or table
+    * move: Moves a region to a different server
+    * split: Splits a region or table
+    * merge_region: Merges two regions, specified as hashed names. The optional boolean flag allows merging of non-subsequent regions
+    * unassign: Unassigns a region
+    * wal_roll: Rolls the WAL, which means close the current and open a new one
+    * catalogjanitor_run: Runs the system catalog janitor process, which operates in the background and cleans out obsolete files etc
+    * catalogjanitor_switch: Toggles the system catalog janitor process, either enabling or disabling it
+    * catalogjanitor_enabled: Returns the status of the catalog janitor background process
+    * zk_dump: Dumps the ZooKeeper details pertaining to HBase. This is a special function offered by an internal class
+    * trace: Starts or stops the trace, using the HTrace framework
+
+##### Replication Commands
+
+    * add_peer: Adds a replication peer
+    * remove_peer: Removes a replication peer
+    * enable_peer: Enables a replication peer
+    * disable_peer: Disables a replication peer
+    * list_peers: List all previously added peers
+    * list_replicated_tables: Lists all tables and column families that have replication enabled on the current cluster
+    * set_peer_tableCFs: Sets specific column families that should be replicated to the given peer
+    * append_peer_tableCFs: Adds the given column families to the specified peer’s list of replicated column families
+    * remove_peer_tableCFs: Removes the given list of column families from the list of replicated families for the given peer
+    * show_peer_tableCFs: Lists the currently replicated column families for the given peer
+
+The `list_replicated_tables` accepts an optional regular expression that allows to filter the matching tables.
+
+##### Security Commands
+
+These commands can be splitted in two groups. The first is the Access Control List set of commands:
+
+    * grant: Grant the named access rights to the given user
+    * revoke: Revoke the previously granted rights of a given user
+    * user_permission: Lists the current permissions of a user. The optional regular expression filters the list
+
+The second group is the visibility label related commands, which address the cell-level visibility labels:
+
+    * add_labels: Adds a list of visibility labels to the system
+    * list_labels: Lists all previously defined labels. An optional regular expression can be used to filter the list
+    * set_auths: Assigns the given list of labels to the provided user ID
+    * get_auths: Returns the list of assigned labels for the given user
+    * clear_auths: Removes all or only the specified list of labels from the named user
+    * set_visibility: Adds a visibility expression to one or more cell
+
+#### Scripting
+
+Sometimes, you want to send one command, and possibly script this call from the scheduled maintenance system (e.g., cron or at). You can do this by
+piping the command into the shell, like in `echo "status" | bin/hbase shell`. Once the command is complete, the shell is closed and control is given
+back to the caller. You can also provide a ruby script to the shell like in:
+
+```shell
+$ echo status > script.rb
+$ bin/hbase shell script.rb
+```
+
+### Web-based UI
