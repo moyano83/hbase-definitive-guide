@@ -8,6 +8,7 @@
 4. [Chapter 4: Client API: Advanced Features](#Chapter4)
 5. [Chapter 5: Client API: Administrative Features](#Chapter5)
 6. [Chapter 6: Available Clients](#Chapter6)
+7. [Chapter 7: Hadoop Integration](#Chapter7)
 
 ## Chapter 1: Introduction<a name="Chapter1"></a>
 
@@ -3383,7 +3384,7 @@ You can use any of the group names to get detailed help using the same `help '<g
     * show_filters: Lists all known filter classes
     * get_table: Returns a table reference that can used in scripting
 
-The commands ending in _all accept a regular expression that ap‐ plies the command to all matching tables.
+The commands ending in _all accept a regular expression that applies the command to all matching tables.
 
 ##### Data Manipulation Commands
 
@@ -3474,3 +3475,138 @@ $ bin/hbase shell script.rb
 ```
 
 ### Web-based UI
+
+The HBase processes expose a web-based UI, which you can use to gain insight into the cluster’s state, as well as the tables it hosts.
+
+#### Master UI Status Page
+
+HBase also starts a web-based information service of vital attributes. Deployed on the master host at port 16010 by default, 16030 for region servers,
+but this can be changed on the hbase-site.xml configuration file with the properties _hbase.master.info.port_ and _hbase.regionserver.info.port_.
+
+##### Main page
+
+The main page consists of multiple sections that give you insight into the cluster status itself, the tables, what the region servers are, and so on.
+
+##### Warning Messages
+
+There are three checks the Master UI page performs: the JVM version for unstable ones, the janitor status and a check for the balancer status.
+
+##### Region Servers
+
+The region server tab contains information about region server stats, memory related details, specific information about the current number of
+requests per second, and also the observed total read and write request counts, accumulated across the life time of the region server process,
+information about the underlying store files of each server and details about compactions.
+
+##### Dead Region Servers
+
+Optional section, which only appears if there is a server that was active once, but is now considered inoperational, or dead.
+
+##### Backup Masters
+
+The Master UI page further lists all the known backup masters. The port displayed here is the RPC port, not the one for the information server.
+
+##### Tables
+
+The Tables section is split into three tabs:
+
+    * User Tables: Here you will see the list of all tables known to your HBase cluster
+    * System Tables: This section list the all the catalog—or system—tables, usually hbase:meta and hbase:namespace
+    * Snapshots: The third and final tab available is listing all the known snapshots
+
+##### Regions in Transition
+
+As regions are managed by the master and region servers to, for example, balance the load across servers they go through short phases of transition.
+Before the operation is performed, the region is added to the list of regions in transition, and once the operation is complete, it is removed. When
+there is no region operation in progress, this section is omitted completely.
+
+##### Tasks
+
+HBase manages quite a few automated operations and background tasks to keep the cluster healthy and operational. The HBase UIs show the currently
+running tasks and their state in the tasks section of their status pages.
+
+##### Software Attributes
+
+This section of the Master UI status page lists cluster wide settings, such as the installed HBase and Hadoop versions, the root ZooKeeper path and
+HBase storage directory, and the cluster ID.
+
+#### Master UI Related Pages
+
+The following pages are related to the Master UI page, as they are directly linked from it.
+
+##### Backup Master UI
+
+If you have more than one HBase Master process started on your cluster, then the active Master UI will list them. Each of the server names is a link
+to the respective backup master, providing its dedicated status page.
+
+##### Table Information Page
+
+When you click on the name of a user or system table in the master’s web-based UI, you have access to the information of the selected table. The
+following groups of information are available on the Table Information page:
+
+    * Table Attributes: Here you can find details about the table itself
+    * Table Regions: This list can be rather large and shows all regions of a table
+    * Regions by Region Server: Lists which region server is hosting how many regions of the selected table
+
+##### ZooKeeper page
+
+This page shows the same information as invoking the zk_dump command of the HBase Shell.
+
+##### Snapshot
+
+Every snapshot name, listed on the Master UI status page, is a link to a dedicated page with information about the snapshot.
+
+#### Region Server UI Status Page
+
+The region servers have their own web-based UI, which you usually access through the master UI.
+
+##### Main page
+
+The main page of the region servers has details about the server, the tasks it performs, the regions it is hosting, and so on. It contains:
+
+    * Server Metrics: Statistics about the current state of the server, its memory usage, number of requests observed, and more
+    * Tasks: The table lists all currently running tasks
+    * Block Cache: When data is read from the storage files, it is loaded in blocks
+    * Regions: Here you can see all the regions hosted by the currently selected region server
+    * Software Attributes: This group of information contains, for example, the version of HBase you are running, when it was compiled, the 
+    ZooKeeper quorum used, server start time, and a link back to the active HBase Master server 
+
+##### Server Metrics
+
+The first part on the status page of a region server relates to summary statistics about the server itself.
+
+##### Block Cache
+
+The first tab, named base info, lists the selected cache implementation class. The next tab shows the cluster wide configuration values, regarding the
+cache properties. The next tab is titled statistics, and shows the overall cache state.
+
+##### Regions
+
+Page listing specific metrics for every region currently hosted by the server showing you its status page. Subdivided in:
+
+    * Base info: Page showing you a brief overview of each region
+    * Request metrics: Retains the region name column but then prints the total read request, and write request counts
+    * Storefile metrics: Tab that lists the summary statistics about the store files contained in each region
+    * Memstore metrics: Lists the accumulated, combined amount of memory occupied by the in-memory stores
+    * Compaction metrics: Summary statistics about the cells currently scheduled for compaction, the number of cells already compacted, and a
+    progress percentage
+    * Coprocessor metrics: Displays the time spent in each coprocessor that was invoked for any hosted region
+
+##### Software Attributes
+
+This section of the Region Server UI status page lists cluster wide settings, such as the installed HBase and Hadoop versions, the ZooKeeper quorum,
+the loaded coprocessor classes, and more.
+
+#### Shared Pages
+
+Generic links that lead to subsequent pages, displaying or controlling additional details of your setup:
+
+    * Local Logs: This link provides a quick way to access the logfiles without requiring access to the server itself
+    * Log Level: This link leads you to a small form that allows you to retrieve and set the logging levels used by the HBase processesDebug Dump
+    * Log Level Result page: For debugging purposes, you can use this link to dump many details of the current Java process, including the stack 
+    traces of the running threads
+    * HBase Configuration: Shared link lets you output the current server configuration as loaded by the process
+
+## Chapter 7: Hadoop Integration<a name="Chapter7"></a>
+
+### Framework
+
