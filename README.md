@@ -3610,3 +3610,103 @@ Generic links that lead to subsequent pages, displaying or controlling additiona
 
 ### Framework
 
+#### MapReduce Introduction
+
+MapReduce follows a divide-and-conquer approach by splitting the data located on a distributed filesystem, or other data sources, so that the servers
+(or rather CPUs, or, more modern, “cores”) available can access these chunks of data and process them as fast as they can.
+
+#### Processing Classes
+
+The classes that are involved in the MapReduce implementation are _InputFormat_, _Mapper_, _Reducer_ and _OutputFormat_.
+
+##### InputFormat
+
+InputFormat classes are responsible for two things: first, split the input data into chunks, and second, return a _RecordReader_ instance that defines
+the types of the key and value objects, and also provides a `nextKeyValue()` method that is used to iterate over each input record.As far as HBase is
+concerned, there the following special implementations:
+
+    * TableInputFormat: This class is based on TableInputFormatBase, which implements the majority of the functionality but remains abstract. 
+    Requires a Scan to run, either  provided or parameterized so the framework can create it. Properties are set on hbase.mapreduce.*
+    * MultiTableInputFormat: Similar to TableInputFormat but for multiple tables
+    * TableSnapshotInputFormat: to read a previously taken table snapshot
+    * WALInputFormat: To read from the binary write-ahead logs that HBase generates
+
+##### Mapper
+
+In this step, each record read using the _RecordReader_ is processed using the `map()` method. There are multiple implementations of derived mapper
+classes available:
+
+    * IdentityTableMapper: The TableMapper class itself does not implement anything but only adds the signatures of the actual key/ value pair classes
+    * GroupingTableMapper: This is a special subclass that needs a list of columns before it can be used. The mapper code checks each row it is given 
+    by the framework in form of a Result instance, and if the given columns exists, it creates a new key as a concatenation of all values assigned to
+    each named column. If any of the columns is missing in the row the entire row is skipped
+    * MultiThreadedTableMapper: To execute the map function inside a thread pool, bypassing the number of threads assigned to you by the scheduler
+
+##### Reducer
+
+Very similar to the Mapper stage, it gets the output of a Mapper class and process it after the data has been shuffled and sorted. For direct HBase
+table operations there is one reducer, the _TableReducer_ class. _IdentityTableReducer_ is a concrete implementation of _TableReducer_.
+
+##### OutputFormat
+
+The job of these classes is to persist the data in various locations. Only one OutputFor mat instance takes the output records from its assigned
+Reducer subsequently.
+
+    * TableOutputFormat: Default output format for many MapReduce jobs that need to write data back into HBase tables
+    * MultiTableOutputFormat: Similar to the TableOutputFormat but for multiple tables
+
+#### Supporting Classes
+
+The MapReduce support comes with the _TableMapReduceUtil_ class that helps in setting up MapReduce jobs over HBase. It has other helper methods to
+configure various aspects of working with the MapReduce framework. They can be grouped as such:
+
+    * Class Path Setup: Includes the necessary jar files given a list of class into the classpath
+    * Security Configuration: These calls allow you to set security credentials, but only do something useful when security is enabled
+    * Configure Table as Input: TEssential in setting up MapReduce jobs where the HBase table acts as in input to a Map instance
+    * Configure Table as Output: Configures a TableOutputFormat to use a HBase table as the tar‐ get for data emitted from the MapReduce job
+    * Configure Snapshot as Input: Similar to the Table as Input
+    * Miscellaneous Tasks:
+      1 - HRegionPartitioner: Routes the mutations to the TableOutputFormat handling a specific region of the output table
+      2 - CellCreator: This class is used internally as part of the bulk loading process
+      3 - JarFinder: Helper class to find, and optionally wrap development classes into JAR files
+      4 - SimpleTotalOrderPartitioner: To distribute mutations in your own MapRe‐ duce jobs, based on a configurable key range
+
+#### MapReduce Locality
+
+HBase relies on block replication to provide durability as it stores its files into the distributed filesystem. HBase transparently stores files in
+HDFS. It does so for the actual data files (HFile) and logs (WAL), it uses the Hadoop API call `FileSystem.create(Path path)` to create these files.
+HDFS has a block placement policy in place that enforces all blocks to be written first on a colocated server. The receiving data node compares the
+server name of the writer with its own, and if they match, the block is written to the local filesystem. If a region server stays up for long enough,
+after a major compaction on all tables it has the files stored locally on the same host.
+
+#### Table Splits
+
+Before a job is executed, the framework calls `getSplit()` from _TableInputFormat_ (which uses the information about the table it represents based on
+the Scan instance you provided) to determine how the data is to be separated into chunks, because it sets the number of map tasks the job requires.
+The number of splits is equal to all regions between the start and stop keys and creates a new _TableRecordReader_ by calling `createRecordReader()`
+for each split (When running MapReduce over HBase, it is strongly ad‐ vised that you turn off speculative execution mode). There are two more advanced
+features available while the table splitting is performed:
+
+    * Auto-balance Splits: Feature that makes split not be smaller than a preconfigured ratio between splits
+    * Shuffle Splits: If set to true, this features runs after all the other split steps have been performed. It takes the final list of splits and 
+    shuffles their order
+
+### MapReduce over Tables
+
+Skipped due to obsolescence
+
+### Bulk Loading Data
+
+You can also stage and bulk load data without going through the HBase servers (made for small data points, and optimized for writes, with its
+sequential, LogStructured Merge Tree based architecture). Bulk loading is an ETL job that stages and loads the data into HBase in its native format.
+What really happens is that after the staging of the data in native HBase store files, the so called HFiles, you atomically move them into the HBase
+storage location, making them and the contained data immediately available. All of this is done by the supplied _ImportTsv_ and _
+LoadIncrementalHFiles_ tools, the phases are:
+
+    * Read the Input Data: Read the original data, which is parsed into Put or Delete instance (referred as mutation), at the available granularity. 
+    This could be one mutation for every column, or one for the entire row
+    * Combine Mutations: As an optimization, we can combine the mutations for the same row emitted by the same mapper task
+    * Route Mutations: This is where we get the grouping of rows within region boundaries working
+    * Sort Rows: There is not much that needs to be done for the rows to be sorted within a region, done by the MapReduce framework
+    * Sort Columns: The PutSortReducer sorts the contained columns like HBase would have done during an organic write operation using the client API
+    * Write Files: The HFileOutputFormat2 class is responsible for writing the actual HFiles
